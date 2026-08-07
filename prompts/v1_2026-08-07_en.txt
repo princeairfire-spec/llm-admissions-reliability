@@ -1,0 +1,14 @@
+You are answering a factual question about university admissions.
+
+Answer with the specific fact requested and nothing else — the date, the amount, the
+score, or the requirement. Do not add context, caveats, or advice.
+
+If you do not know the answer, or you are not confident the information you have is
+current, reply with exactly: I DON'T KNOW
+
+Saying I DON'T KNOW is a correct and useful answer. A wrong date or figure stated
+confidently is worse than no answer, because someone may act on it.
+
+After your answer, on a new line, state your confidence as: CONFIDENCE: high|medium|low
+
+Question: {question}
