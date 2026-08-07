@@ -1,0 +1,126 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Admissions benchmark item",
+  "description": "One verified question-answer pair about university admissions. Every field is either recorded from an official source or assigned by the sampling design. This file is the human-readable contract; src/validate.py enforces it.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "university",
+    "country",
+    "coverage_tier",
+    "question_en",
+    "question_ru",
+    "fact_type",
+    "volatility",
+    "gold_answer",
+    "acceptable_variants",
+    "prior_year_answer",
+    "source_url",
+    "source_quote",
+    "snapshot_path",
+    "date_accessed",
+    "verified_by",
+    "verification_round",
+    "notes"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+      "description": "Stable slug, lowercase-hyphenated. Convention: <university>-<program>-<fact>-<qualifier>. Never reused, never renumbered."
+    },
+    "university": {
+      "type": "string",
+      "minLength": 2,
+      "description": "Institution name exactly as it appears on its own official site."
+    },
+    "country": {
+      "type": "string",
+      "pattern": "^[A-Z]{2}$",
+      "description": "ISO 3166-1 alpha-2 country code."
+    },
+    "coverage_tier": {
+      "enum": ["high", "mid", "low"],
+      "description": "How well represented the institution is in the English-language web. Assigned per institution in docs/universities.md, never per item, so the axis stays consistent."
+    },
+    "question_en": {
+      "type": "string",
+      "minLength": 20,
+      "description": "The question in English. Must name the institution, the program level, and the admissions cycle explicitly, so the answer is unambiguous without context."
+    },
+    "question_ru": {
+      "type": "string",
+      "minLength": 20,
+      "description": "The same question in Russian. A translation of question_en, not a separate question: any difference in what is asked confounds the language axis."
+    },
+    "fact_type": {
+      "enum": [
+        "deadline",
+        "test_requirement",
+        "tuition",
+        "document_list",
+        "program_structure",
+        "eligibility"
+      ],
+      "description": "What kind of fact is being asked about."
+    },
+    "volatility": {
+      "enum": ["annual", "stable"],
+      "description": "annual = the correct answer changes every admissions cycle. stable = it does not change year to year."
+    },
+    "gold_answer": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The correct answer in canonical form, as stated by the official source on date_accessed."
+    },
+    "acceptable_variants": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "description": "Other surface forms of the same answer that must be scored correct: alternative date formats, currency notation, the Russian rendering. Not a place for approximately-correct answers."
+    },
+    "prior_year_answer": {
+      "type": ["string", "null"],
+      "description": "The value this same fact held in the previous admissions cycle, or null for stable facts and for facts with no documented prior value. This is what makes the stale-versus-fabricated error split possible: an incorrect answer matching this string means the model is out of date rather than inventing. See docs/design_decisions.md DD-003."
+    },
+    "source_url": {
+      "type": "string",
+      "pattern": "^https://",
+      "description": "The official university page the answer was read from. Not a ranking site, not an aggregator, not Wikipedia."
+    },
+    "source_quote": {
+      "type": "string",
+      "minLength": 10,
+      "description": "The exact sentence from the source that establishes the answer. Copied verbatim. This is what a reader checks the claim against."
+    },
+    "snapshot_path": {
+      "type": "string",
+      "pattern": "^data/snapshots/",
+      "description": "Repo-relative path to the archived copy of source_url. The page will change; the snapshot is the evidence."
+    },
+    "date_accessed": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+      "description": "ISO date the source was read. Reported in the paper: these numbers are a photograph of a moment."
+    },
+    "verified_by": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Who verified this item."
+    },
+    "verification_round": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 2,
+      "description": "1 after the first pass, 2 after the independent second pass. Only round-2 items go in the final dataset."
+    },
+    "round1_gold_answer": {
+      "type": ["string", "null"],
+      "description": "What the first pass recorded, filled in during the second pass only when the two passes disagreed. The count of non-null values here is the inter-pass disagreement rate reported in the paper. Do not overwrite the round-1 value to make it match."
+    },
+    "notes": {
+      "type": "string",
+      "description": "Anything a reader needs to interpret this item: source pages contradicting each other, ambiguous wording, a fact that turned out to be conditional. May be empty. A source contradicting itself is a finding, not a data problem."
+    }
+  }
+}
