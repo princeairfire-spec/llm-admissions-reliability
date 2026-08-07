@@ -1,0 +1,5 @@
+# One dependency, needed only by src/run_eval.py.
+# Everything else — validation, normalisation, bootstrap intervals — is standard
+# library on purpose: methodology that lives inside a library is methodology the
+# author cannot defend out loud.
+anthropic>=0.60

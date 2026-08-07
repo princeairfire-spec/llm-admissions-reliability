@@ -1,0 +1,15 @@
+# secrets — never commit API keys
+.env
+*.key
+
+# python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# os
+.DS_Store
+
+# notebook noise
+.ipynb_checkpoints/
