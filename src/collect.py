@@ -17,6 +17,7 @@ thing to explain in the methods section.
 
 import argparse
 import json
+import re
 import sys
 import urllib.error
 import urllib.request
@@ -39,6 +40,33 @@ HEADERS = {
 }
 
 TIMEOUT_SECONDS = 30
+
+
+# Credential-shaped strings that appear in ordinary university pages: browser keys for
+# embedded maps and analytics, published by the institutions themselves in their own
+# HTML. Archiving a page verbatim would re-publish them from this repository, which is
+# both discourteous and the kind of thing that gets a repository flagged. None of them
+# can carry an admissions fact, so removing them costs the evidence nothing.
+CREDENTIAL_PATTERNS = [
+    rb"AIza[A-Za-z0-9_\-]{30,}",          # Google API keys (Maps, Places)
+    rb"ghp_[A-Za-z0-9]{30,}",             # GitHub tokens
+    rb"sk-[A-Za-z0-9]{30,}",              # OpenAI-style keys
+    rb"AQ\.[A-Za-z0-9_\-]{30,}",          # newer Google API keys
+    rb"xox[baprs]-[A-Za-z0-9\-]{20,}",    # Slack tokens
+]
+
+
+def scrub(body):
+    """Remove credential-shaped strings from an archived page before it is written.
+
+    Snapshots are evidence and are kept verbatim in every other respect — this is the
+    one exception, and it is recorded here rather than done silently. A replaced string
+    leaves a visible marker so a reader can see that something was removed and what
+    kind of thing it was.
+    """
+    for pattern in CREDENTIAL_PATTERNS:
+        body = re.sub(pattern, b"[CREDENTIAL-REMOVED-BY-ARCHIVER]", body)
+    return body
 
 
 def snapshot_path(slug, when=None):
@@ -74,7 +102,7 @@ def fetch(url, slug):
         return None
 
     SNAPSHOT_DIR.mkdir(parents=True, exist_ok=True)
-    destination.write_bytes(body)
+    destination.write_bytes(scrub(body))
 
     # A redirect means the saved page is not the URL recorded in the benchmark. That
     # matters when checking the item later, so record where the request actually landed.
