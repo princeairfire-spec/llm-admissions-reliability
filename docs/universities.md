@@ -20,20 +20,41 @@ this list is frozen alongside the prompts.
 
 ## The list
 
-| Tier | Institution | Country | Notes |
-|---|---|---|---|
-| high | Harvard University | US | |
-| high | MIT | US | |
-| high | University of Oxford | GB | |
-| high | Stanford University | US | |
-| mid | TU Delft | NL | |
-| mid | Trinity College Dublin | IE | |
-| mid | KAIST | KR | |
-| mid | University of Bologna | IT | |
-| low | MBZUAI | AE | |
-| low | Nazarbayev University | KZ | |
-| low | Innopolis University | RU | |
-| low | Universitas Indonesia | ID | |
+Twenty-five institutions, generated from `src/new_item.py` so this table cannot drift
+from what the code actually samples. One named degree programme per institution and
+level — see the note in that file for why facts are scoped to a programme rather than to
+the institution.
+
+| Tier | Institution | Country | Key | Graduate programme sampled | Admissions page |
+|---|---|---|---|---|---|
+| high | ETH Zurich | CH | `eth` | the MSc in Computer Science | verified |
+| high | Harvard University | US | `harvard` | the Master of Science in Computational Science and Engineering | verified |
+| high | Imperial College London | GB | `imperial` | the MSc in Computing | verified |
+| high | MIT | US | `mit` | the master's program in Electrical Engineering and Computer Science | verified |
+| high | National University of Singapore | SG | `nus` | the MComp in Computer Science | verified |
+| high | Stanford University | US | `stanford` | the MS in Computer Science | verified |
+| high | University of Cambridge | GB | `cambridge` | the MPhil in Advanced Computer Science | verified |
+| high | Yale University | US | `yale` | the MS in Computer Science | verified |
+| low | American University of Central Asia | KG | `auca` | the MSc in Computer Science | verified |
+| low | Chulalongkorn University | TH | `chula` | the MSc in Computer Science | verified |
+| low | Innopolis University | RU | `innopolis` | the MSc in Computer Science | verified |
+| low | MBZUAI | AE | `mbzuai` | the MSc in Computer Science | verified |
+| low | Nazarbayev University | KZ | `nazarbayev` | the MSc in Computer Science | verified |
+| low | Universitas Indonesia | ID | `indonesia` | the master's program in Computer Science | verified |
+| low | Ural Federal University | RU | `urfu` | the MSc in Computer Science | verified |
+| low | Vietnam National University | VN | `vnu` | the MSc in Information Technology | verified |
+| mid | Aalto University | FI | `aalto` | the MSc in Computer Science | verified |
+| mid | KAIST | KR | `kaist` | the master's program in Computer Science | verified |
+| mid | KTH Royal Institute of Technology | SE | `kth` | the MSc in Computer Science | verified |
+| mid | TU Delft | NL | `delft` | the MSc in Computer Science | verified |
+| mid | Technical University of Munich | DE | `tum` | the MSc in Informatics | verified |
+| mid | Trinity College Dublin | IE | `trinity` | the MSc in Computer Science | verified |
+| mid | Universiti Malaya | MY | `malaya` | the MSc in Computer Science | verified |
+| mid | University of Bologna | IT | `bologna` | the second cycle degree in Artificial Intelligence | verified |
+| mid | University of Warsaw | PL | `warsaw` | the MSc in Computer Science | verified |
+
+"Admissions page" says whether a URL has been verified with an HTTP request or whether
+the page list still falls back to a site-scoped search for it.
 
 ## On the tier assignment
 
@@ -51,6 +72,19 @@ it is what PopQA (arXiv:2212.10511) uses for entity popularity — and report wh
 agrees with the hand assignment. If it does, the tier axis is defensible; if it does
 not, the disagreements are worth a paragraph. This does not need to be done before
 collection starts, but it is cheap and it closes an obvious reviewer question.
+
+## Change log
+
+**2026-08-08 — Oxford replaced by Cambridge.** Every `ox.ac.uk` page returns HTTP 403 to
+a non-browser request, so its pages cannot be archived. An item whose snapshot cannot be
+taken has no evidence behind it and fails the verification protocol, so Oxford is not
+usable here. Cambridge is the same tier and the same country and answers normally, so
+the sampling design is unchanged.
+
+This belongs in the paper's Limitations as a sentence: institutions that block automated
+archiving are excluded by construction, which is a mild selection effect on the
+`high` tier — the very universities most targeted by scrapers are the most likely to
+block them.
 
 ## Institutions considered and not included
 

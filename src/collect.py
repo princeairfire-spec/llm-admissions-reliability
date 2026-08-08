@@ -121,13 +121,57 @@ def from_benchmark(path):
     print(f"\n{len(seen)} unique URLs")
 
 
+def from_sheet(path="data/annotation_sheet.csv"):
+    """Archive every page named in a filled annotation sheet, in one pass.
+
+    Doing this per row by hand is the most tedious part of a sitting and the easiest to
+    get wrong: a snapshot filed under the wrong name is a broken evidence link that only
+    surfaces later, in validate.py.
+    """
+    import csv
+
+    sheet = Path(path)
+    if not sheet.exists():
+        print(f"error: {sheet} does not exist — create it with: python3 src/sheet.py make")
+        return
+
+    with sheet.open(encoding="utf-8-sig", newline="") as f:
+        rows = [r for r in csv.DictReader(f) if (r.get("page_url") or "").strip()]
+
+    if not rows:
+        print(f"{sheet} has no page_url filled in yet — nothing to archive.")
+        return
+
+    saved = skipped = failed = 0
+    for row in rows:
+        slug, url = row["snapshot_name"].strip(), row["page_url"].strip()
+        if snapshot_path(slug).exists():
+            skipped += 1
+            continue
+        print(f"{slug}: {url}")
+        if fetch(url, slug):
+            saved += 1
+        else:
+            failed += 1
+
+    print(f"\n{saved} archived, {skipped} already present, {failed} failed")
+    if failed:
+        print("Failed pages usually mean the URL is wrong or the site blocked the request.")
+        print("Open the URL in a browser and correct it in the sheet.")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("url", nargs="?", help="page to archive")
     parser.add_argument("slug", nargs="?", help="short name for the file, usually the item id")
+    parser.add_argument("--from-sheet", nargs="?", const="data/annotation_sheet.csv",
+                        metavar="PATH", help="archive every page_url in the annotation sheet")
     parser.add_argument("--from-benchmark", metavar="PATH", help="re-archive every source_url in a benchmark file")
     args = parser.parse_args()
 
+    if args.from_sheet:
+        from_sheet(args.from_sheet)
+        return 0
     if args.from_benchmark:
         from_benchmark(args.from_benchmark)
         return 0

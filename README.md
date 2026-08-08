@@ -13,17 +13,40 @@ Pipeline written and smoke-tested on synthetic data. Data collection has not sta
 
 ## Workflow
 
-```bash
-pip install -r requirements.txt
-export ANTHROPIC_API_KEY=...
+Nothing needs to be installed: the free-tier backends speak plain HTTPS and everything
+here uses the Python standard library. `export GEMINI_API_KEY=...` and go.
 
-python3 src/collect.py <official-url> <item-id>   # archive the page
-python3 src/validate.py                            # schema, cell balance, duplicates
-python3 src/run_eval.py --model opus5 --dry-run    # cost before spending
-python3 src/run_eval.py --model opus5 --limit 20 --languages en --modes nosearch
-python3 src/score.py --sample 50                   # label answers + hand-check sample
-python3 src/analyze.py                             # tables
-python3 src/analyze.py --agreement                 # automatic vs human agreement
+**Building the dataset** — a model proposes facts from archived pages, three mechanical
+checks discard anything unsupported, and a person accepts or rejects each survivor
+against its quote. Gold answers are never taken from a model's memory; see
+[DD-007](docs/design_decisions.md).
+
+```bash
+python3 src/extract.py init      # page list — paste in URLs
+python3 src/extract.py fetch     # archive every page
+python3 src/extract.py run       # propose candidates, run the checks
+python3 src/verify.py            # accept or reject each, ~15s apiece
+python3 src/verify.py --stats    # acceptance rate, control catch rate
+python3 src/verify.py --import   # accepted candidates -> data/benchmark.jsonl
+python3 src/wayback.py           # previous-cycle values from the Internet Archive
+python3 src/validate.py          # schema, cell balance, duplicates
+python3 src/progress.py          # what is left
+```
+
+Days later, on a random sample, for the disagreement number the paper reports:
+
+```bash
+python3 src/verify.py --second-pass 50
+```
+
+**Running the experiment**
+
+```bash
+python3 src/run_eval.py --model gemini-flash --dry-run
+python3 src/run_eval.py --model gemini-flash --limit 20 --languages en --modes nosearch
+python3 src/score.py --sample 50
+python3 src/analyze.py
+python3 src/figures.py
 ```
 
 Start with [docs/pilot_checklist.md](docs/pilot_checklist.md). The pilot exists to find
