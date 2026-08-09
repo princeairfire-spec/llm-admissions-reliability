@@ -31,7 +31,9 @@ PERIOD_FAMILIES = {
     "programme": ["full programme", "full program", "entire programme", "entire program",
                   "whole programme", "whole program", "total programme", "total program",
                   "for the programme", "for the program", "for the entire",
-                  "total tuition", "programme fee", "program fee"],
+                  "total tuition", "programme fee", "program fee",
+                  "one-year program", "one-year programme", "one year program",
+                  "1-year program", "two-year program", "two-year programme"],
     "unit": ["per credit", "/credit", "per unit", "/unit", "per module", "per course",
              "per credit hour", "credit hour"],
 }

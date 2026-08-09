@@ -197,6 +197,12 @@ def question_fields(university, level, cycle="Fall 2027", cycle_ru="осенью
     # "на undergraduate program" is not Russian; use the ordinary Russian word instead.
     if prog_ru in ("undergraduate program", "graduate program"):
         prog_ru = level_ru_acc
+    # The same repair for the half-generic pattern: "на master's program in X" is not
+    # Russian either. The named part keeps its English, the generic part translates.
+    elif prog_ru.startswith("master's program in "):
+        prog_ru = "магистерскую программу по " + prog_ru[len("master's program in "):]
+    elif prog_ru.startswith("bachelor's program in "):
+        prog_ru = "бакалаврскую программу по " + prog_ru[len("bachelor's program in "):]
     return {"uni": name, "level_en": level_en,
             "level_ru_acc": level_ru_acc, "level_ru_prep": level_ru_prep,
             "prog": prog, "prog_ru": prog_ru,

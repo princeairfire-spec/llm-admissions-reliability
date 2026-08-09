@@ -193,3 +193,65 @@ MSQA natively sourced multilingual multicultural SimpleQA benchmark abstention
 - Check ACL Anthology and the ACL/EMNLP 2026 proceedings directly; the searches above
   were web-weighted and may under-cover venue-only papers.
 - Confirm A1's dataset really is unreleased (check for a repo or a later version).
+
+---
+
+## 4. Phase 0 addendum — second search, 2026-08-09
+
+Four papers surfaced in a follow-up search; all four verified against arXiv abstracts
+on 2026-08-09. Three are from 2026 and postdate the first search. This is what Phase 0
+re-runs are for: finding these now is a working note, finding them in a review is a
+rejection.
+
+**A4. MARAUS: Multi-Agent RAG for Real-World University Admissions Counseling**
+(arXiv:2507.11272). Hybrid retrieval + multi-agent orchestration deployed at a
+Vietnamese university; 6,000+ real interactions over six query categories, ~92%
+accuracy, hallucination reduced from 15% to ~1.45%.
+*Relation:* they build a system, we build a measurement — but they report a
+hallucination number in our domain, at an institution that is squarely our low tier,
+and a reviewer will reach for the comparison immediately. Cite it and draw the line
+ourselves: an engineered, retrieval-grounded deployment is the mitigation whose
+necessity our benchmark measures; their 15% baseline is what an unassisted model does,
+which is our object of study.
+
+**B8. The Geometry of Forgetting: Temporal Knowledge Drift as an Independent Axis in
+LLM Representations** (arXiv:2605.09195). Distinguishes stale recall from confabulation
+and shows the MLP retrieval circuit produces *identical* dynamics for both (r > 0.81,
+six models) — the two failure modes are indistinguishable from inside the model, which
+is why confidence-based detection fails.
+*Impact on claim 2:* the stale/fabricated **concept** is no longer ours alone; their
+ground truth is Wikidata-style timelines. What remains ours: ground truth from dated
+archives of the primary sources themselves, in a consumer domain where both errors
+carry a date and a cost, with the prior value recovered per item rather than inherited
+from a curated timeline. Their internals result actually *strengthens* our design: if
+the distinction is invisible in the representations, only an external, dated source of
+truth can draw it — which is exactly what the benchmark supplies.
+**Read in full before submission** — dataset details (reported five-cell taxonomy,
+~3.5k queries) are not in the abstract and must be checked before we characterise them.
+
+**B9. Asking For An Old Friend: Temporal Failure Modes in Statutory QA**
+(arXiv:2605.23497). 312 expert-validated time-sensitive German statutory QA pairs;
+five models × four modes (vanilla, web search, two temporally-filtered RAG variants);
+concludes temporal validity must be treated as a hard constraint.
+*Relation:* structurally the closest recipe to ours — high stakes, annually shifting
+facts, expert-validated, comparable size, same conditions — in a different domain.
+Cite as convergent design; our additions are the coverage axis, the language axis, the
+interaction question, and the public snapshot trail.
+
+**B10. How often do Answers Change? Estimating Recency Requirements in QA**
+(arXiv:2603.16544). RecencyQA, 4,031 questions with recency and stationarity labels;
+non-stationary questions are the hardest.
+*Relation:* generalises our volatility axis. Our `annual` facts are, in their terms,
+high-recency and *stationary* (the change schedule is known: once per cycle) — worth
+one sentence in §3, because it sharpens what our axis does and does not vary.
+
+### Consequences applied
+
+1. **Contribution 2 reworded** (draft + outline): from "existing benchmarks score both
+   as one kind of error" to "the distinction has been drawn at the representation level
+   on curated timelines; we give it primary-source ground truth in a domain where both
+   errors have a date and a price."
+2. **Interaction (contribution 3) now carries the main weight of novelty.** No found
+   work crosses coverage with volatility or pre-commits interpretations.
+3. **Contribution 1 (the artifact) unharmed** — still no public admissions dataset
+   with archived evidence and measured verification.
