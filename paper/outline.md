@@ -46,10 +46,12 @@ that diminishes its predecessors reads as insecurity and invites a hostile revie
 ## 3. Benchmark construction
 
 - Sampling axes and why each exists; the interaction requirement that drives cell balance.
-- The twelve institutions and the English-source constraint as a confound control for
-  the language axis.
-- Verification protocol: official page → snapshot → exact quote → second independent
-  pass after several days.
+- The 25 institutions (8 high / 9 mid / 8 low) and the English-source constraint as a
+  confound control for the language axis.
+- Verification protocol: official page → snapshot → model-assisted extraction under
+  five mechanical checks → human acceptance with measured attention controls →
+  independent second annotator → delayed intra-annotator pass.
+  Prose drafted in `paper/methods_draft.md`.
 - **The disagreement rate between passes, reported as a number.** This is the paper's
   claim to data quality; without it "carefully verified" is just a word.
 - `prior_year_answer` and why it was collected.

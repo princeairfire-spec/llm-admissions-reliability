@@ -101,6 +101,7 @@ def rows_from_sheet():
 
 BENCHMARK = Path("data/benchmark.jsonl")
 PRIOR_DIR = Path("data/snapshots/prior")
+PRIOR_CANDIDATES = Path("data/prior_candidates.jsonl")
 
 # fact_type as stored on benchmark items -> the fact key extract.py works in.
 FACT_KEY = {"deadline": "deadline", "tuition": "tuition",
@@ -198,11 +199,20 @@ def fill(months_back):
         return 0
 
     # Phase 2: extract the same fact from the old copy, checked the same way.
+    # Proposals go to disk the moment they pass the checks. Extraction spends quota, and
+    # holding its results in memory until a person answers means an unattended run — a
+    # scheduled one, say — spends the quota and keeps nothing. The review phase reads
+    # from the file, so extracting and deciding no longer have to happen in one sitting.
+    pending = []
+    if PRIOR_CANDIDATES.exists():
+        pending = [json.loads(l) for l in
+                   PRIOR_CANDIDATES.read_text(encoding="utf-8").splitlines() if l.strip()]
+    have_proposals = {p["item_id"] for p in pending}
+
     print(f"\nExtracting from {len(captures)} capture(s):")
-    proposals = []
     for item in todo:
         path = captures.get(item["id"])
-        if path is None:
+        if path is None or item["id"] in have_proposals:
             continue
         fact = FACT_KEY[item["fact_type"]]
         uni_key = item["id"].split("-")[0]
@@ -229,19 +239,32 @@ def fill(months_back):
                     and normalise(value) in normalise(quote):
                 kept.append((value, quote))
         print(f"{len(kept)} candidate(s)" + (f"  [{note}]" if note else ""))
-        for value, quote in kept:
-            proposals.append((item, value, quote, path))
+        with PRIOR_CANDIDATES.open("a", encoding="utf-8") as out:
+            for value, quote in kept:
+                record = {"item_id": item["id"], "value": value, "quote": quote,
+                          "snapshot": str(path)}
+                out.write(json.dumps(record, ensure_ascii=False) + "\n")
+                pending.append(record)
 
-    if not proposals:
+    todo_ids = {i["id"] for i in todo}
+    pending = [p for p in pending if p["item_id"] in todo_ids]
+    if not pending:
         print("\nNothing extracted yet.")
+        return 0
+    if not sys.stdin.isatty():
+        print(f"\n{len(pending)} prior-year proposal(s) saved to {PRIOR_CANDIDATES}.")
+        print("Review them interactively:  python3 src/wayback.py --fill")
         return 0
 
     # Phase 3: the person decides, exactly as in the main pipeline.
-    print(f"\n{len(proposals)} prior-year candidate(s). For each: does the quoted text "
+    print(f"\n{len(pending)} prior-year candidate(s). For each: does the quoted text "
           f"from LAST YEAR'S page state this value?\n")
+    items_by_id = {i["id"]: i for i in rows}
     by_item = {}
-    for item, value, quote, path in proposals:
-        by_item.setdefault(item["id"], []).append((item, value, quote, path))
+    for record in pending:
+        item = items_by_id[record["item_id"]]
+        by_item.setdefault(item["id"], []).append(
+            (item, record["value"], record["quote"], record["snapshot"]))
 
     changed = 0
     for item_id, group in by_item.items():
@@ -277,6 +300,14 @@ def fill(months_back):
         with BENCHMARK.open("w", encoding="utf-8") as f:
             for row in rows:
                 f.write(json.dumps(row, ensure_ascii=False) + "\n")
+        # Decided proposals leave the queue; skipped ones stay for the next sitting.
+        decided_ids = {i for i, g in by_item.items()
+                       if items_by_id[i].get("prior_year_answer")
+                       or "did not change" in (items_by_id[i].get("notes") or "")}
+        keep = [p for p in pending if p["item_id"] not in decided_ids]
+        with PRIOR_CANDIDATES.open("w", encoding="utf-8") as f:
+            for p in keep:
+                f.write(json.dumps(p, ensure_ascii=False) + "\n")
         print(f"\nSaved. Next:  python3 src/validate.py")
     return 0
 
