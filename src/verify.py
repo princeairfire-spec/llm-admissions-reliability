@@ -428,6 +428,95 @@ def make_packet(rows, size, seed):
     return 0
 
 
+def fill_packet():
+    """Walk the second annotator through the packet at this terminal, in Russian.
+
+    Exists because the realistic second annotator sits at the same computer: mailing a
+    CSV back and forth through a spreadsheet adds an export step where a novice loses
+    the file format, and none of that friction buys any independence. Independence comes
+    from two things this interface preserves: the packet rows carry no trace of the
+    first decisions, and the first reviewer walks away from the keyboard.
+
+    Russian, because the annotator this project actually has reads Russian. The quote
+    stays in the page's own language — it is the evidence, and judging whether it states
+    the answer needs only enough English to compare a number and a word.
+
+    Writes into the same CSV that --merge-packet reads, so the two hand-off styles are
+    interchangeable and the paper does not care which was used.
+    """
+    if not PACKET.exists():
+        print(f"{PACKET} not found. First:  python3 src/verify.py --packet 40")
+        return 1
+    with PACKET.open(encoding="utf-8-sig", newline="") as f:
+        rows = list(csv.DictReader(f))
+    fields = list(rows[0].keys())
+    answer_col = next(k for k in fields if "correct" in k)
+    note_col = next(k for k in fields if "note" in k)
+
+    todo = [r for r in rows if not (r.get(answer_col) or "").strip()]
+    if not todo:
+        print("Пакет уже заполнен. Дальше:  python3 src/verify.py --merge-packet "
+              f"{PACKET}")
+        return 0
+
+    print(f"\n{BOLD}Проверка фактов — {len(todo)} строк(и).{OFF}")
+    print("""
+На каждом экране: вопрос, цитата с официальной страницы университета и
+предложенный ответ. Ставьте «y», если ОБА условия выполнены:
+
+  1. цитата действительно утверждает этот ответ — он там написан, а не додуман;
+  2. ответ отвечает именно на заданный вопрос, а не на соседний.
+
+Цитата может быть подлинной, а ответ всё равно неверным: настоящая дата,
+но дедлайн стипендии, а не подачи документов. Часть строк испорчена намеренно —
+их можно поймать только чтением.
+
+Не ищите ничего в интернете и ни с кем не советуйтесь: вопрос только в том,
+следует ли ответ из цитаты.
+
+  y = верно    n = неверно    s = пропустить    q = выйти (ответы сохранятся)
+""")
+    input("Enter, чтобы начать... ")
+
+    done = 0
+    for row in todo:
+        print("=" * 78)
+        print(f"  {row.get('n', '?')} из {len(rows)}\n")
+        print("  Вопрос:")
+        print(wrap(row["question"]))
+        print("\n  Цитата с официальной страницы:")
+        print(wrap(row["quote_from_official_page"]))
+        print(f"\n  Предложенный ответ:  {BOLD}{row['proposed_answer']}{OFF}\n")
+
+        while True:
+            answer = input("  Ответ верен?  [y/n/s/q] ").strip().lower()
+            if answer in ("y", "n", "s", "q", "д", "н"):
+                break
+        if answer == "q":
+            break
+        if answer == "s":
+            continue
+        row[answer_col] = "y" if answer in ("y", "д") else "n"
+        note = input("  Заметка, если есть сомнение (Enter — нет): ").strip()
+        if note:
+            row[note_col] = note
+        done += 1
+
+    with PACKET.open("w", encoding="utf-8-sig", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fields)
+        writer.writeheader()
+        writer.writerows(rows)
+
+    left = sum(1 for r in rows if not (r.get(answer_col) or "").strip())
+    print(f"\nСохранено: {done} ответ(ов) за этот заход.")
+    if left:
+        print(f"Осталось {left} — продолжить можно той же командой.")
+    else:
+        print("Всё заполнено, спасибо! Дальше хозяин проекта запускает:")
+        print(f"  python3 src/verify.py --merge-packet {PACKET}")
+    return 0
+
+
 def kappa(pairs):
     """Cohen's kappa for two annotators over accept/reject, stdlib only.
 
@@ -446,6 +535,33 @@ def kappa(pairs):
     if expected >= 1.0:
         return None          # one label only: kappa is undefined, not perfect
     return (observed - expected) / (1 - expected)
+
+
+def first_opinion(candidate, rows):
+    """What the first reviewer thought of the *fact* on this row.
+
+    Not the same thing as the row's final decision. Import-time deduplication marks the
+    extra copies of an accepted fact as rejected, so "$67,504 (one-year program)" — the
+    gold answer of the Harvard tuition item — sat in a row whose decision read reject.
+    The second annotator judged it correct, because it is. Comparing his verdict against
+    the bookkeeping produced eleven "disagreements" of which nine were rows where the two
+    people agree about the fact and one of them was charged with the dedup's paperwork.
+    Same failure class as counting dedup rejections in the acceptance rate.
+
+    A rejected row therefore counts as agreed-with-accept when its answer is the gold
+    answer, or a recorded acceptable variant, of the same fact.
+    """
+    if candidate.get("decision") == "accept":
+        return "accept"
+    base = candidate.get("base_id", candidate["id"])
+    answer = " ".join((candidate.get("answer") or candidate["value"]).split()).lower()
+    for row in rows:
+        if row.get("base_id", row["id"]) != base or row.get("decision") != "accept":
+            continue
+        accepted = [row.get("answer") or row["value"], *row.get("variants", [])]
+        if answer in (" ".join(a.split()).lower() for a in accepted):
+            return "accept"
+    return "reject"
 
 
 def merge_packet(rows, path):
@@ -467,7 +583,11 @@ def merge_packet(rows, path):
                 blank += 1
                 continue
             second = "accept" if answer.startswith("y") else "reject"
-            candidate.setdefault("reviews", []).append({
+            # Re-merging the same packet replaces the earlier entries instead of stacking
+            # a second copy — running this twice must not manufacture data.
+            candidate["reviews"] = [v for v in candidate.get("reviews", [])
+                                    if v.get("pass") != "second_annotator"]
+            candidate["reviews"].append({
                 "pass": "second_annotator", "decision": second,
                 "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             })
@@ -475,7 +595,7 @@ def merge_packet(rows, path):
                 controls_total += 1
                 controls_caught += second == "reject"
                 continue        # controls measure attention, not agreement about facts
-            pairs.append((candidate["decision"], second))
+            pairs.append((first_opinion(candidate, rows), second))
 
     save(rows)
     print(f"\n{len(pairs)} item(s) judged by both people"
@@ -502,7 +622,7 @@ def show_disputed(rows):
     disputed = []
     for row in rows:
         second = [v for v in row.get("reviews", []) if v.get("pass") == "second_annotator"]
-        if second and second[-1]["decision"] != row.get("decision"):
+        if second and second[-1]["decision"] != first_opinion(row, rows):
             disputed.append((row, second[-1]["decision"]))
     if not disputed:
         print("No disagreements between the two annotators.")
@@ -510,7 +630,7 @@ def show_disputed(rows):
     print(f"{len(disputed)} item(s) judged differently:\n")
     for row, second in disputed:
         print("=" * 78)
-        print(f"  {BOLD}{row['id']}{OFF}   you: {row['decision']}   them: {second}")
+        print(f"  {BOLD}{row['id']}{OFF}   you: {first_opinion(row, rows)}   them: {second}")
         print(wrap(question_for(row)))
         print(wrap(highlight(row["quote"], row["value"])))
         print(f"  answer: {BOLD}{row.get('answer') or row['value']}{OFF}\n")
@@ -640,6 +760,9 @@ def main():
     parser.add_argument("--packet-seed", type=int, default=20260809)
     parser.add_argument("--merge-packet", metavar="CSV",
                         help="read a returned packet and report agreement")
+    parser.add_argument("--fill-packet", action="store_true",
+                        help="fill the packet interactively at this terminal (Russian; "
+                             "for a second annotator at the same computer)")
     parser.add_argument("--disputed", action="store_true",
                         help="show items the two annotators judged differently")
     args = parser.parse_args()
@@ -649,6 +772,9 @@ def main():
 
     if args.packet:
         return make_packet(load(), args.packet, args.packet_seed)
+
+    if args.fill_packet:
+        return fill_packet()
 
     if args.merge_packet:
         return merge_packet(load(), args.merge_packet)

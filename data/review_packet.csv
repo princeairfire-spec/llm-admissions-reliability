@@ -1,0 +1,56 @@
+﻿n,question,quote_from_official_page,proposed_answer,correct? y/n,note (optional)
+1,What is the minimum English language test score required for admission to the MSc in Informatics at Technical University of Munich for Fall 2027 entry? Name the test and the score.,PEARSON ENGLISH LANGUAGE TEST PTE Academic with an Overall Score of at least 65 points.,Pearson English Language Test 65,y,
+2,What is the minimum academic requirement to apply to the MSc in Computer Science at Aalto University?,"The bachelor's degree must: 
+ be equivalent to 180 ECTS credits or three years of full-time study;",180 ECTS credits or three years of full-time study,y,
+3,How many letters of recommendation are required to apply to the BSc in Artificial Intelligence at MBZUAI for Fall 2027 entry?,"Recommendation letters (recommended but not mandatory): Include a maximum of two teachers, mentors, or supervisors as references.",two,n,
+4,What is the minimum academic requirement to apply to the MPhil in Advanced Computer Science at University of Cambridge?,Applicants for this course should have achieved a First class Honours Degree .,First class Honours Degree,y,yes I am not sure
+5,What is the language of instruction for the BSc in Artificial Intelligence at MBZUAI?,"What language are the lectures taught in at MBZUAI? 
+All lectures are taught in English.",English,y,
+6,What is the minimum English language test score required for admission to the MSc in Computer Science at Aalto University for Fall 2027 entry? Name the test and the score.,"TOEFL iBT (Internet-based Test): For a test taken on or after 21 January 2026: total score 4.5 and 4.0 in all subtests : reading, listening, writing, and speaking.","TOEFL iBT total score 4.5 and 4.0 in all subtests : reading, listening, writing, and speaking",y,
+7,What is the standard duration of the master's program in Computer Science at Universitas Indonesia?,"How long is the study period for the Postgraduate Masters program in Computer Science? Normally, the length of study for the Masters level is 4 semesters.",4 semesters,y,
+8,What is the minimum English language test score required for admission to the MSc in Informatics at Technical University of Munich for Fall 2027 entry? Name the test and the score.,IELTS Online Academic with a minimum overall band score of 6.5 .,IELTS 6.5,y,
+9,What is the standard duration of the MSc in Computer Science at ETH Zurich?,"Credits | duration 
+ 120 ECTS | 2 years",120,n,
+10,What is the standard duration of the MSc in Computer Science at Aalto University?,"Duration: 
+ 2 years,
+ full-time",2 years,y,
+11,"What is the tuition fee for the Master of Science in Computational Science and Engineering at Harvard University for the 2026–2027 academic year entry? State the amount and the period it covers, as the university states them.","Tuition for one course $8,438 Tuition for two courses $16,876 Tuition for three courses $25,314 Tuition for four courses $33,752 NOTE: In order to be eligible to receive financial aid in the form of loans, students must not fall below half-time status, which requires a minimum of 2 courses per term","$8,438 per term",n,
+12,What is the standard duration of the MComp in Computer Science at National University of Singapore?,The normal candidature period for full-time and part-time students is 1.5 years and 2.5 years respectively.,1.5 years,y,
+13,What is the standard duration of the MSc in Computer Science at Trinity College Dublin?,The M.Sc in Computer Science is an exciting one-calendar-year programme aimed at excellent students who are keen to deepen their existing knowledge of computing.,one-calendar-year,y,
+14,What is the minimum English language test score required for admission to the Master of Science in Computational Science and Engineering at Harvard University for Fall 2027 entry? Name the test and the score.,Earning a minimum score of 7 on the IELTS Academic test and a minimum Speaking score of 6.5.*,IELTS 6.5.,n,
+15,What is the standard duration of the MSc in Informatics at Technical University of Munich?,"Standard Duration of Studies
+ 4
+ semesters (fulltime)","4
+ semesters (fulltime)",y,
+16,What is the standard duration of the BSc in Artificial Intelligence at MBZUAI?,"B.Sc. in AI 
+streams 
+Duration: 4 years",4 years,y,
+17,What is the standard duration of the second cycle degree in Artificial Intelligence at University of Bologna?,Second Cycle Degree/Two Year Master in,Two Year,y,
+18,In which city is Trinity College Dublin's main campus located?,"Located in a beautiful campus in the heart of Dublin’s city centre, Trinity is Ireland’s highest ranked university.",Dublin,y,
+19,What is the language of instruction for the MSc in Computer Science at TU Delft?,"Degree Master of Computer Science Accreditation Accredited by the NVAO Credits 120 EC, 24 Months Type Regular study programme Mode Full-time Language of instruction English Start September",English,y,
+20,What is the final application deadline for the MPhil in Advanced Computer Science at University of Cambridge for Fall 2027 entry?,"Course Funding Deadline 
+ Dec. 3, 2025","Dec. 3, 2025",n,
+21,What is the language of instruction for the MSc in Computer Science at Aalto University?,"Language of instruction: 
+ English",English,y,
+22,What is the standard duration of the MSc in Informatics at Technical University of Munich?,"Standard Duration of Studies
+ 4
+ semesters (fulltime)",4,y,
+23,What is the standard duration of the MS in Computer Science at Stanford University?,"Completion of the program requires 45 units of coursework, and it takes 1.5 years on average for students to complete the full-time program.",1.5 years on average,y,
+24,What is the minimum academic requirement to apply to the BSc in Artificial Intelligence at MBZUAI?,"Candidates for MBZUAI's undergraduate program must have successfully completed, or be in the final year of completing, a recognized secondary/high school qualification with a minimum overall average of 90% or equivalent, depending on the curriculum and competitiveness of the admissions cycle.",90%,n,idk
+25,What is the language of instruction for the MSc in Computer Science at Nazarbayev University?,"The program runs exclusively in English, which serves as the “lingua franca” of the field: all major journals publish in English, and all major conferences use English as the primary language of discourse.",English,y,
+26,What is the language of instruction for the MSc in Computer Science at ETH Zurich?,"Language of instruction 
+ English",English,y,
+27,What is the standard duration of the MSc in Informatics at Technical University of Munich?,The duration of the master’s program in Informatics is four semesters.,four,y,
+28,What is the minimum English language test score required for admission to the MSc in Computer Science at Aalto University for Fall 2027 entry? Name the test and the score.,"TOEFL iBT (Internet-based Test): For a test taken on or after 21 January 2026: total score 4.5 and 4.0 in all subtests : reading, listening, writing, and speaking. For a test taken before 21 January 2026: total score 92 and writing score 22 .",TOEFL iBT total score 92 and writing score 22,n,
+29,What is the standard duration of the MSc in Computer Science at Nazarbayev University?,"The Master of Science in Computer Science Program is a two-year program (120 ECTS credits) designed to provide students with advanced mastery of the core CS disciplines balanced with exposure to emerging areas (such as mobile and pervasive computing, multi-factor authentication, privacy and security, persistent data collection, “big data” analysis and data mining).",two-year,y,
+30,What is the language of instruction for the MSc in Computer Science at Aalto University?,The language of instruction in the Computer Science major is English.,English,y,
+31,What is the standard duration of the MS in Computer Science at Yale University?,The department offers a one-year MS degree and a two-year MS degree.,one-year,n,
+32,What is the standard duration of the MPhil in Advanced Computer Science at University of Cambridge?,The ACS is a nine–month course which starts in early October and finishes on 30 June.,nine–month,y,
+33,"What is the tuition fee for the Master of Science in Computational Science and Engineering at Harvard University for the 2026–2027 academic year entry? State the amount and the period it covers, as the university states them.","Tuition for four courses $33,752 NOTE: In order to be eligible to receive financial aid in the form of loans, students must not fall below half-time status, which requires a minimum of 2 courses per term","$33,752 per term",n,
+34,What is the language of instruction for the MSc in Computer Science at Chulalongkorn University?,"Language of teaching is mainly Thai, but some courses may be conducted in English.","Thai, but some courses may be conducted in English",y,
+35,What is the final application deadline for the MS in Computer Science at Yale University for Fall 2027 entry?,"January 2, 2027 Deadline for fee waiver requests . Application deadline for: African Studies Applied and Computational Mathematics Archaeological Studies Architecture Computer Science (MS)","January 2, 2027",y,
+36,What is the standard duration of the master's program in Computer Science at Universitas Indonesia?,Length of Study The MIK UI study program is designed to be completed within 3-4 semesters.,3-4 semesters,y,
+37,What is the standard duration of the MSc in Computing at Imperial College London?,"Suitable for graduates of disciplines other than computing, this one-year programme is tailored towards those looking to add computing qualifications to their portfolio.",one-year,y,
+38,"What is the tuition fee for the Master of Science in Computational Science and Engineering at Harvard University for Fall 2027 entry? State the amount and the period it covers, as the university states them.","Computational Science and Engineering master of science (SM) $67,504 (one-year program)","$67,504 (one-year program)",y,
+39,What is the final application deadline for the MS in Computer Science at Yale University for Fall 2027 entry?,"January 2, 2027 Deadline for fee waiver requests . Application deadline for: African Studies Applied and Computational Mathematics Archaeological Studies Architecture Computer Science (MS) Earth and Planetary Sciences East Asian Languages and Literatures* East Asian Studies Environment* European and Russian Studies French* International Development and Economics Investigative Medicine Italian Studies* Medieval Studies Near Eastern Languages and Civilizations Nursing Philosophy* Spanish and Portuguese*","January 2, 2027",y,
+40,"What is the tuition fee for the Master of Science in Computational Science and Engineering at Harvard University for the 2026–2027 academic year entry? State the amount and the period it covers, as the university states them.","Tuition for three courses $25,314 Tuition for four courses $33,752 NOTE: In order to be eligible to receive financial aid in the form of loans, students must not fall below half-time status, which requires a minimum of 2 courses per term","$25,314 per term",n,
