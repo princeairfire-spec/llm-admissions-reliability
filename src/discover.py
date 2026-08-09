@@ -96,15 +96,19 @@ MAX_URLS = 60000           # per institution, before scoring
 LEVEL_MARKERS = {
     # "undergrad" rather than "undergraduate": it covers both spellings, and sites shorten
     # it in paths far more often than they write it out.
-    "ug": [r"undergrad", r"bachelor", r"/ug/", r"-ug-", r"freshman", r"first-year",
-           r"baccalaureate"],
+    # "bsc"/"1cycle": Delft files its bachelor pages under bsc-international-diploma
+    # and Bologna calls a bachelor's a first-cycle degree — level words differ by country
+    # as much as fee units do.
+    "ug": [r"undergrad", r"bachelor", r"\bbsc\b", r"bsc-", r"/ug[-/]", r"-ug-",
+           r"freshman", r"first-year", r"baccalaureate", r"1cycle", r"first-cycle"],
     # Graduate schools often identify themselves by acronym or subdomain rather than by
     # the word: Harvard's requirement lives on gsas.harvard.edu and says "graduate"
     # nowhere in the path. Every "grad" pattern carries the (?<!under) guard, because
     # "undergrad" contains "grad" the same way "undergraduate" contains "graduate".
-    "pg": [r"postgraduate", r"(?<!under)graduate", r"master", r"msc", r"/pg/", r"-pg-",
-           r"phd", r"doctoral", r"gsas", r"(?<!under)gradschool", r"(?<!under)grad-school",
-           r"(?<!under)grad\.", r"(?<!under)grad/"],
+    "pg": [r"postgraduate", r"(?<!under)graduate", r"master", r"msc", r"/pg[-/]",
+           r"-pg-", r"phd", r"doctoral", r"gsas", r"(?<!under)gradschool",
+           r"(?<!under)grad-school", r"(?<!under)grad\.", r"(?<!under)grad/",
+           r"(?<!under)gradadmissions", r"2cycle", r"second-cycle", r"magistrale"],
 }
 
 
