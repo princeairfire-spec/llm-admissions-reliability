@@ -68,7 +68,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from new_item import FACTS, LEVELS, PROGRAMS, UNIVERSITIES  # noqa: E402
-from qualifiers import TEST_FAMILIES, families_for, family_of  # noqa: E402
+from qualifiers import TEST_FAMILIES, families_for, family_of, states_fact  # noqa: E402
 from run_eval import http_post_json                # noqa: E402
 
 PAGES = Path("data/pages.csv")
@@ -751,7 +751,21 @@ def run(force=False, only=None):
     # institutions in the list were never reached. Record what has been asked, and ask
     # only for what is new.
     done = load_ledger()
-    skipped_done = 0
+    skipped_done = skipped_absent = 0
+    calls_today = sum(1 for e in done.values() if e.get("at") == date.today().isoformat())
+    if calls_today:
+        print(f"{calls_today} extraction call(s) already spent today.\n")
+
+    # Spend the quota scarcest-cell-first. The page list is ordered by institution, so a
+    # run that dies at the daily cap used to die after Harvard's fifth page but before
+    # the low tier's first — the cells the design is short of were funded last. Annual
+    # facts before stable ones, low tier before high, and the order within a day is the
+    # order of need.
+    from new_item import UNIVERSITIES as _UNIS
+    ANNUAL_ROLES = {"fees": 0, "english": 0, "admissions": 0, "program": 1, "about": 2}
+    TIER_RANK = {"low": 0, "mid": 1, "high": 2}
+    rows.sort(key=lambda r: (ANNUAL_ROLES.get(r["role"], 3),
+                             TIER_RANK.get(_UNIS[r["university"]][2], 3)))
 
     rng = random.Random(CONTROL_SEED)
     produced = rejected_quote = rejected_value = rejected_context = controls = 0
@@ -778,6 +792,19 @@ def run(force=False, only=None):
             # Only ask for the fields this kind of page plausibly carries.
             asked = [f.strip() for f in (row.get("facts") or "").split(",") if f.strip()]
             wanted = {f: FIELD_HINTS[f] for f in asked if f in FACTS}
+            if not wanted:
+                continue
+
+            # A call against a page that visibly lacks the fact is a spent request with a
+            # certain outcome. The signature test is a regex over the snapshot already on
+            # disk — free — and most rows predate the discovery gate that would have
+            # applied it. Facts without a cheap signature (city, documents, eligibility,
+            # language, duration) are never dropped this way.
+            SIGNED = {"tuition": "fees", "english": "english", "deadline": "admissions"}
+            for fact_name, role_name in SIGNED.items():
+                if fact_name in wanted and not states_fact(role_name, text):
+                    del wanted[fact_name]
+                    skipped_absent += 1
             if not wanted:
                 continue
 
@@ -949,6 +976,9 @@ def run(force=False, only=None):
     if skipped_done:
         print(f"  {skipped_done} page(s) skipped: already extracted from the same "
               f"snapshot for the same fields (--force to redo)")
+    if skipped_absent:
+        print(f"  {skipped_absent} fact request(s) dropped before calling: the page "
+              f"shows no signature of that fact")
     print(f"  {rejected_quote} discarded: quote not found in the archived page")
     print(f"  {rejected_value} discarded: value not inside its own quote")
     print(f"  {rejected_context} discarded: quote had no context beyond the value itself")

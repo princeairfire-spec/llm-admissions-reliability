@@ -240,6 +240,12 @@ def fill(months_back):
                 kept.append((value, quote))
         print(f"{len(kept)} candidate(s)" + (f"  [{note}]" if note else ""))
         with PRIOR_CANDIDATES.open("a", encoding="utf-8") as out:
+            if not kept:
+                # A capture that yielded nothing is an answered question, not an open
+                # one: without this marker every later run re-spends a quota call to
+                # learn the same nothing.
+                out.write(json.dumps({"item_id": item["id"], "empty": True,
+                                      "snapshot": str(path)}, ensure_ascii=False) + "\n")
             for value, quote in kept:
                 record = {"item_id": item["id"], "value": value, "quote": quote,
                           "snapshot": str(path)}
@@ -247,7 +253,7 @@ def fill(months_back):
                 pending.append(record)
 
     todo_ids = {i["id"] for i in todo}
-    pending = [p for p in pending if p["item_id"] in todo_ids]
+    pending = [p for p in pending if p["item_id"] in todo_ids and not p.get("empty")]
     if not pending:
         print("\nNothing extracted yet.")
         return 0
