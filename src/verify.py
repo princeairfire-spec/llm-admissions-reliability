@@ -622,6 +622,8 @@ def show_disputed(rows):
     disputed = []
     for row in rows:
         second = [v for v in row.get("reviews", []) if v.get("pass") == "second_annotator"]
+        if any(v.get("pass") == "resolution" for v in row.get("reviews", [])):
+            continue        # already argued out; the entry records who kept what and why
         if second and second[-1]["decision"] != first_opinion(row, rows):
             disputed.append((row, second[-1]["decision"]))
     if not disputed:
