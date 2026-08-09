@@ -17,6 +17,9 @@ import sys
 from collections import Counter
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).parent))
+from extract import normalise  # noqa: E402
+
 # ---------------------------------------------------------------------------
 # The rules. These mirror data/schema.json. If you change one, change both.
 # ---------------------------------------------------------------------------
@@ -29,7 +32,7 @@ REQUIRED_FIELDS = [
     "verified_by", "verification_round", "notes",
 ]
 
-OPTIONAL_FIELDS = ["round1_gold_answer"]
+OPTIONAL_FIELDS = ["round1_gold_answer", "answer_parts", "cycle_quoted"]
 
 ALLOWED_VALUES = {
     "coverage_tier": {"high", "mid", "low"},
@@ -117,6 +120,64 @@ def check_fields(line_number, item):
     # not actually testing volatility, and it makes stale-vs-fabricated unscoreable.
     if item.get("prior_year_answer") and item.get("prior_year_answer") == item.get("gold_answer"):
         errors.append(f"{where}: prior_year_answer equals gold_answer — this item does not test volatility")
+
+    # The whole point of splitting a fee into amount and period (DD-008) is that both are
+    # quoted. If either drifts out of the quote the guarantee stated in the paper — every
+    # part of the answer appears inside the quote a person accepted — is no longer true,
+    # and nothing else in the pipeline would notice.
+    parts = item.get("answer_parts")
+    if parts:
+        quote = normalise(item.get("source_quote", ""))
+        for name in ("amount", "qualifier"):
+            value = normalise(parts.get(name, ""))
+            if not value:
+                errors.append(f"{where}: answer_parts.{name} is empty")
+            elif value not in quote:
+                errors.append(f"{where}: answer_parts.{name} {parts[name]!r} is not in "
+                              f"the source quote — DD-008 guarantee broken")
+        composed = normalise(item.get("gold_answer", ""))
+        for name in ("amount", "qualifier"):
+            if normalise(parts.get(name, "")) not in composed:
+                errors.append(f"{where}: gold_answer {item.get('gold_answer')!r} does not "
+                              f"contain its own {name}")
+
+    # A gold answer is compared to model output by the scorer, and the scorer's fallback
+    # for long text is a substring test. A verbose gold answer therefore penalises being
+    # right: "TOEFL iBT total score 4.5 and 4.0 in all subtests: reading, listening,
+    # writing, and speaking" was accepted into the dataset, and a model answering
+    # "TOEFL iBT 4.5" — correct — would never contain that string. The gold answer is a
+    # value, not a sentence; the sentence's place is source_quote.
+    if parts:
+        amount = parts.get("amount", "")
+        numbers = re.findall(r"\d[\d,]*(?:\.\d+)?", amount)   # "33,360" is one number
+        if len(numbers) > 1:
+            errors.append(f"{where}: answer_parts.amount {amount[:50]!r} carries "
+                          f"{len(numbers)} numbers — one value per item; sub-scores and "
+                          f"floors belong in the quote, not the answer")
+        elif len(amount) > 40:
+            errors.append(f"{where}: answer_parts.amount is {len(amount)} chars — "
+                          f"a value, not a sentence; the sentence belongs in source_quote")
+
+    # A range accepts either of its ends: the scorer extracts every number, so a gold
+    # answer of "3-4 semesters" scores "3 semesters" correct. If the page states a range,
+    # either the fact is not well-defined enough to test, or the page elsewhere states
+    # the norm ("Normally ... 4 semesters") and that is the answer.
+    for text in (item.get("gold_answer", ""), *item.get("acceptable_variants", [])):
+        # Dates ("2026-2027", "30 June") and cycle labels legitimately contain hyphenated
+        # numbers; the hazard is ranges in countable answers.
+        if item.get("fact_type") in ("deadline",):
+            continue
+        if re.search(r"\d\s*[-–—]\s*\d", text) and not re.search(r"20\d{2}", text):
+            errors.append(f"{where}: {text[:40]!r} contains a numeric range — the scorer "
+                          f"would credit either end of it")
+
+    # A cycle-stamped item asks about the intake read off its page; if the question does
+    # not name it, the item silently reverts to asking about a default year.
+    if item.get("cycle_quoted"):
+        years = re.findall(r"20\d{2}", item["cycle_quoted"])
+        if years and not any(y in item.get("question_en", "") for y in years):
+            errors.append(f"{where}: intake {item['cycle_quoted']!r} was read off the page "
+                          f"but question_en names no year from it")
 
     return errors
 

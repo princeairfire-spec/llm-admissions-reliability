@@ -9,16 +9,25 @@ Then review them: python3 src/verify.py
 ## The line this pipeline does not cross
 
 A model never supplies a gold answer from memory. It is shown an archived page and asked
-to copy a fact and the sentence that states it out of that page. Extraction from a
-document in front of the model is a different task from recall, and the output is not
-trusted on its own: every candidate passes two deterministic checks before a person ever
-sees it, and a person then accepts or rejects it against the quote.
+to copy a fact and the text that states it out of that page. Extraction from a document
+in front of the model is a different task from recall, and the output is not trusted on
+its own: every candidate passes deterministic checks before a person ever sees it, and a
+person then accepts or rejects it against the quote.
 
     1. The quote must appear verbatim in the archived page.
     2. The extracted value must appear inside the quote.
+    3. The quote must carry context beyond the value itself.
+    4. Where the value is meaningless alone — a fee without its period, a score without
+       its test — that qualifier must also appear inside the quote (DD-008).
+    5. Where the fact belongs to an intake — a deadline, a fee — the intake must appear
+       in the archived page, and the question is then asked about that intake (DD-009).
 
-Both are substring tests over the snapshot — no model involved. A fabricated quote or a
-value that does not come from the quoted sentence is discarded automatically.
+All are substring tests over the snapshot; no model judges them. A fabricated quote, or a
+value that does not come from the quoted text, is discarded automatically.
+
+Check 5 is deliberately weaker than the others: the intake is matched against the whole
+page rather than the quote, because on a fee table the year is a heading above the
+figures. It scopes the question rather than answering it, and the reviewer sees it.
 
 ## Guarding the human step
 
@@ -45,6 +54,7 @@ candidate.
 
 import argparse
 import csv
+import hashlib
 import html
 import json
 import os
@@ -58,6 +68,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from new_item import FACTS, LEVELS, PROGRAMS, UNIVERSITIES  # noqa: E402
+from qualifiers import TEST_FAMILIES, families_for, family_of  # noqa: E402
 from run_eval import http_post_json                # noqa: E402
 
 PAGES = Path("data/pages.csv")
@@ -98,12 +109,120 @@ def page_text(path):
     return re.sub(r"[ \t ]+", " ", re.sub(r"\n\s*\n+", "\n", text)).strip()
 
 
+def _fold(text):
+    """Character-level folding shared by normalise and its index-tracking twin."""
+    text = text.replace("\u2019", "'").replace("\u2018", "'")
+    text = text.replace("\u201c", '"').replace("\u201d", '"')
+    return text.replace("\u2013", "-").replace("\u2014", "-").replace("\u00a0", " ")
+
+
 def normalise(text):
     """Loose form for substring checks: collapse whitespace, drop case and quote style."""
-    text = text.replace("’", "'").replace("‘", "'")
-    text = text.replace("“", '"').replace("”", '"')
-    text = text.replace("–", "-").replace("—", "-").replace(" ", " ")
-    return re.sub(r"\s+", " ", text).strip().lower()
+    return re.sub(r"\s+", " ", _fold(text)).strip().lower()
+
+
+def normalise_indexed(text):
+    """normalise(), plus the original index each surviving character came from.
+
+    Needed to widen a quote back out into the raw page: a match is found in the
+    normalised text, and the span has to be cut from the text a person will read.
+    """
+    folded = _fold(text).lower()
+    out, index, previous_space = [], [], True
+    for position, char in enumerate(folded):
+        if char.isspace():
+            if previous_space:
+                continue
+            out.append(" ")
+            index.append(position)
+            previous_space = True
+        else:
+            out.append(char)
+            index.append(position)
+            previous_space = False
+    while out and out[-1] == " ":
+        out.pop()
+        index.pop()
+    return "".join(out), index
+
+
+# How far either side of a quote the qualifier may be found before the candidate is
+# dropped. A fee and the words "per term" sit in neighbouring cells of one table row;
+# a fee and a period from a different table are not each other's.
+WIDEN_WINDOW = 320
+
+
+def widen(quote, qual, page, page_norm, page_index, fact=None):
+    """Return a quote extended to contain `qual`, or None if it is not close by.
+
+    The qualifier is half the answer -- "$33,360" alone answers nothing -- so it has to
+    be inside the quote a reviewer reads, not merely somewhere on the page. But pages put
+    the amount in one cell and its period in the next, so the extractor cannot always
+    produce one quote holding both, and requiring it discarded fifteen of twenty-two
+    candidates in a single run.
+
+    Widening is done here, from the archived bytes, by substring arithmetic -- the model
+    does not get to choose the wider span. The guarantee is unchanged: every part of the
+    answer appears inside the quote shown to the person who accepted it.
+    """
+    needle = normalise(quote)
+    at = page_norm.find(needle)
+    if at < 0:
+        return None
+    start, end = at, at + len(needle)
+
+    # Harvard's fee page lists per-course rates and then, four figures later, a note
+    # saying students need "a minimum of 2 courses per term". Widening forward found that
+    # "per term" and attached it to $8,438, producing "$8,438 per term" — a real number
+    # and a real phrase that were never about each other. Anything of the same kind lying
+    # between the two means they belong to different rows, and the pair is not evidence.
+    INTERVENING = {"tuition": re.compile(r"[$£€¥]\s?\d[\d,. ]{2,}|\b\d[\d,. ]{3,}\s?(?:usd|eur|gbp|chf|sek|aed)\b")}
+    barrier = INTERVENING.get(fact)
+
+    # The extractor writes the period in its own words — "per year" — where the page
+    # says "Annual fee". Only the page's wording may enter a quote, so search for every
+    # wording of the same period, starting with the one the extractor gave. Without this
+    # the widening never fired: in a full run it rescued none of the nine candidates it
+    # was built for, because none of them matched literally.
+    wordings = [normalise(qual)]
+    if fact is not None:
+        families = families_for(FACTS[fact][0])
+        family = family_of(qual, families)
+        if family:
+            wordings += [normalise(w) for w in families[family]]
+
+    # Gather every candidate position, then take the nearest. Returning the first wording
+    # that matched anywhere was how "per term" from a footnote beat "Cost/Term" standing
+    # directly above the figure: the literal wording is tried first, and it happened to
+    # occur further away.
+    found = []
+    for target in dict.fromkeys(w for w in wordings if w):
+        position = page_norm.rfind(target, max(0, start - WIDEN_WINDOW), start)
+        if position >= 0:
+            found.append((start - (position + len(target)), position, position + len(target)))
+        position = page_norm.find(target, end, end + WIDEN_WINDOW)
+        if position >= 0:
+            found.append((position - end, position, position + len(target)))
+
+    crossed = False
+    for _, at_qual, qual_end in sorted(found):
+        span_start, span_end = min(start, at_qual), max(end, qual_end)
+        if barrier:
+            gap = (page_norm[qual_end:start] if at_qual < start
+                   else page_norm[end:at_qual])
+            if barrier.search(gap):
+                crossed = True
+                continue     # another figure sits between them; they are different rows
+        # `crossed` means a nearer wording was rejected for having other figures in
+        # between, so this value sits inside a table of alternatives — a rate card rather
+        # than a programme fee. The code cannot tell "$33,752 per term" (a fee period)
+        # from "2 courses per term" (a workload) when nothing numeric separates them, and
+        # guessing would be worse than saying so. Flag it and let a person read it.
+        return (page[page_index[span_start]:page_index[span_end - 1] + 1].strip(),
+                page[page_index[at_qual]:page_index[qual_end - 1] + 1],
+                crossed)
+    return None
+
 
 
 # ---------------------------------------------------------------------------
@@ -221,30 +340,150 @@ def fetch():
 
 # ---------------------------------------------------------------------------
 
+# Fields whose value means nothing on its own.
+#
+# MIT states graduate tuition as "$33,360" per term; Cambridge states a figure per year;
+# KTH states one for the full programme. Asking for "the annual tuition fee" made the
+# page unanswerable wherever the university does not publish an annual figure — the
+# extractor correctly returned nothing, since computing it is forbidden. The same held
+# for "minimum TOEFL iBT score" at universities that publish only IELTS.
+#
+# That is worse than lost yield. Publishing convention travels with country and with
+# tier, so admitting only universities that happen to publish in the assumed unit makes
+# the tier comparison a comparison of publishing conventions. The fix is to ask what the
+# page actually states and carry the qualifier into the answer: "$33,360 per term",
+# "IELTS 7.0". Both parts are quoted from the page, so both stay machine-checkable.
+QUALIFIER = {
+    "tuition": ("period", "the period this amount covers, worded exactly as the page "
+                          "writes it — 'per year', 'per term', 'per semester', 'for the "
+                          "full programme'", "{value} {qual}"),
+    "english": ("test", "which test this score belongs to, named exactly as the page "
+                        "names it — 'TOEFL iBT', 'IELTS', 'Duolingo'", "{qual} {value}"),
+}
+
+
+# Facts whose value is meaningless without the intake it belongs to, and which pages
+# actually stamp with one. The prompt used to fix the cycle at Fall 2027 and order the
+# extractor to omit anything else. Universities publish fee tables for the academic year
+# now beginning, so MIT's "Fall and spring 2026-2027 ... $33,360" was correctly refused,
+# and every fee page refused with it — which is why the annual cells stayed empty while
+# the stable ones filled up. The intake is now read off the page and quoted like any
+# other part of the answer, and the question is then asked about that intake.
+CYCLE_FACTS = {"deadline", "tuition"}
+
+# Facts a university sets for a whole level of study rather than per programme. MIT's
+# registrar publishes one graduate tuition for every graduate student; its fee page never
+# says "Electrical Engineering and Computer Science". An earlier rule — take nothing the
+# page states only "for the institution in general" — was added to stop institution-level
+# answers being filed against a programme, and it is right for duration and language,
+# which really do differ per programme. Applied to fees and deadlines it refused the very
+# pages that carry them.
+LEVEL_WIDE = {"tuition", "english", "deadline", "documents", "eligibility", "city"}
+
+
+def canonical_cycle(raw):
+    """Turn a quoted intake — '2026-2027', 'Fall 2027 entry' — into question wording.
+
+    Regex, not a model: the extractor supplies the verbatim string and the checks confirm
+    it is on the page, but the phrasing that goes into a question is derived mechanically
+    so no unquoted text can reach the benchmark.
+    """
+    years = re.findall(r"20\d{2}", raw or "")
+    if len(years) >= 2 and years[0] != years[1]:
+        return f"the {years[0]}–{years[1]} academic year", \
+               f"на {years[0]}–{years[1]} учебный год"
+    if years:
+        return f"Fall {years[0]}", f"осенью {years[0]} года"
+    return None
+
+
 def build_prompt(text, level_en, university, wanted, program, cycle="Fall 2027"):
     lines = "\n".join(
-        f"- {fact}: {desc}" for fact, desc in wanted.items()
+        f"- {fact}: {desc}" + (
+            f"\n    also give \"{QUALIFIER[fact][0]}\": {QUALIFIER[fact][1]}"
+            if fact in QUALIFIER else ""
+        )
+        for fact, desc in wanted.items()
     )
+    specific = sorted(f for f in wanted if f not in LEVEL_WIDE)
+    shared = sorted(f for f in wanted if f in LEVEL_WIDE)
+    scope_rule = ""
+    if specific:
+        scope_rule += f"""
+For {', '.join(specific)}: these differ between programmes. Take only what the page
+states for {program} itself. If it states them for a different programme, or only in
+general terms, omit the field.
+"""
+    if shared:
+        scope_rule += f"""
+For {', '.join(shared)}: universities normally set these for all {level_en} applicants
+rather than per programme. A value this page states for {level_en} students at
+{university} as a whole does apply to {program} — give it, and do not omit it for being
+stated generally. If the page also states a different value specifically for {program},
+prefer that one. If it is stated for a different level of study, omit it.
+"""
+
+    cycle_rule = ""
+    if any(f in CYCLE_FACTS for f in wanted):
+        stamped = ", ".join(sorted(f for f in wanted if f in CYCLE_FACTS))
+        cycle_rule = f"""
+For {stamped}, also give "cycle": the intake or academic year the value belongs to,
+copied from the page — "2026-2027", "Fall 2027", "2027 entry". It usually sits in the
+heading above the table rather than beside the figure; take it from there. Do not work
+it out from the page's publication date and do not assume the current year. If the page
+nowhere says which intake the value is for, omit the field. Values the page marks as
+belonging to a past intake are still wanted; the intake you give is what tells them
+apart.
+"""
+    # A worked example, because the constraints interact in a way that is easy to read as
+    # impossible. Asked for a fee, its period and its intake, all quoted, the extractor
+    # kept returning [] — the figure sits in one table cell and its period and year in
+    # another, so no single narrow quote satisfies everything and the honest response to
+    # "omit if you cannot" is to omit. Showing one widened quote that does satisfy it is
+    # what turned an empty result into a full one.
+    example = ""
+    if "tuition" in wanted:
+        example = """
+Worked example. If the page contains this flattened table row:
+
+    Fall and spring 2026-2027 (per term) Full regular tuition $33,360
+
+then a correct element is:
+
+    {"fact": "tuition", "value": "$33,360", "period": "per term",
+     "cycle": "2026-2027",
+     "quote": "Fall and spring 2026-2027 (per term) Full regular tuition $33,360"}
+
+The quote was widened to take in the period and the intake as well as the figure. Widen
+it the same way whenever the parts sit in neighbouring cells.
+"""
+    qualified = [f for f in wanted if f in QUALIFIER]
+    extra = ""
+    if qualified:
+        names = ", ".join(f'"{QUALIFIER[f][0]}" (for {f})' for f in qualified)
+        extra = f"""
+- Some fields above ask for a second part as well: {names}. Give it in the same element.
+  It must be copied from the same quote, verbatim, and it must appear inside that quote.
+  Do not supply it from your own knowledge and do not normalise it — if the page says
+  "per term", write "per term", not "per semester". If the quote does not state it,
+  quote a sentence that does, or omit the field.
+"""
     return f"""You are reading an archived admissions page from {university}.
 
-Extract ONLY facts about {program} at {university}, stated explicitly on this page.
-
-The admissions cycle in question is {cycle}. Deadlines, fees and test requirements are
-asked about that cycle specifically. Pages often still show the previous cycle: if a
-date or figure belongs to an earlier intake, omit it rather than offering it. Only give
-a cycle-dependent value when the page ties it to {cycle}.
-
-If the page covers several programmes, take only the values that apply to {program}.
-If it never mentions that programme, and the value you would give belongs to a different
-programme or to the institution in general, omit the field.
+Extract facts about {program} at {university}, stated explicitly on this page.
+{scope_rule}{cycle_rule}
 
 Fields to look for:
 {lines}
 
 Rules, all mandatory:
 - Copy the value exactly as the page words it. Do not convert formats or units.
-- Give the sentence from the page that states it, copied VERBATIM, character for
-  character. Do not paraphrase, summarise, tidy, or shorten it.
+- Give the text from the page that states it, copied VERBATIM, character for character.
+  Do not paraphrase, summarise, tidy, or shorten it. It does not have to be a sentence:
+  fees, deadlines and test scores are usually published in tables, and a flattened table
+  row such as "Fall and spring 2026-2027 (per term) Full regular tuition $33,360" is a
+  valid quote. Quote the contiguous run of text that carries both the label and the
+  value, so the two can be seen to belong together.
 - The value you give must appear inside the quote you give.
 - If a field is not stated explicitly on this page, omit it entirely. Do not infer it,
   do not compute it, and do not use anything you know from outside this page.
@@ -254,9 +493,11 @@ Rules, all mandatory:
   afterwards whether the fact is well defined enough to use.
 - "fact" must be exactly one of the field names listed above, spelled identically.
   Do not invent field names and do not describe the field in prose.
-
+{extra}
+{example}
 Return a JSON array. Each element: {{"fact": "<field name>", "value": "<the value>",
-"quote": "<verbatim sentence>"}}. Return [] if nothing qualifies.
+"quote": "<verbatim text>"}}, plus the extra parts named above where they are asked for.
+Return [] if nothing qualifies.
 
 PAGE TEXT:
 {text}
@@ -265,8 +506,8 @@ PAGE TEXT:
 
 FIELD_HINTS = {
     "deadline": "the final application deadline date for this admissions cycle",
-    "tuition": "annual tuition fee, with its currency",
-    "english": "minimum TOEFL iBT score required",
+    "tuition": "the tuition fee as this page states it, with its currency",
+    "english": "the minimum English language test score required",
     "documents": "how many recommendation letters or referees are required",
     "eligibility": "the minimum academic requirement to apply — a GPA, a degree classification, or a percentage, whichever the page states",
     "language": "the language of instruction",
@@ -287,15 +528,28 @@ def call_extractor(text, level_en, university, wanted, program, cycle="Fall 2027
             "generationConfig": {"responseMimeType": "application/json", "maxOutputTokens": 4096},
         },
     )
+    # "Nothing extracted" and "the call did not work" used to look identical here: both
+    # returned []. A whole batch of institutions reported 0 candidates and 0 discards,
+    # which reads as "these pages have no facts" and is the one message that stops you
+    # looking. Return the reason alongside the items so a silent failure has to announce
+    # itself.
     candidates = body.get("candidates") or []
     if not candidates:
-        return []
+        blocked = (body.get("promptFeedback") or {}).get("blockReason")
+        return [], f"no candidates in response ({blocked or 'no reason given'})"
+
+    finish = candidates[0].get("finishReason")
     raw = "".join(p.get("text", "") for p in candidates[0].get("content", {}).get("parts", []))
+    if not raw.strip():
+        return [], f"empty text (finishReason={finish})"
     try:
         parsed = json.loads(raw)
     except json.JSONDecodeError:
-        return []
-    return parsed if isinstance(parsed, list) else []
+        cut = "; output was cut off" if finish == "MAX_TOKENS" else ""
+        return [], f"response was not JSON (finishReason={finish}{cut})"
+    if not isinstance(parsed, list):
+        return [], f"response was {type(parsed).__name__}, expected a list"
+    return parsed, None
 
 
 # Patterns taken from the reasons a reviewer actually rejected candidates in the first
@@ -331,11 +585,32 @@ SUSPECT = {
 SUSPECT_FOR = {
     "duration": ["bound", "conditional"],
     "deadline": ["wrong_round", "conditional"],
-    "tuition": ["wrong_unit", "conditional"],
+    # "wrong_unit" was dropped once the period became part of the answer. It flagged
+    # "per semester" as suspect, which was only true while the question presumed an
+    # annual figure; now the unit is quoted rather than assumed, and a per-semester fee
+    # is a correct answer to a question that asks what the page states.
+    "tuition": ["conditional"],
     "english": ["conditional"],
     "documents": ["bound"],
     "eligibility": ["conditional"],
 }
+
+
+def compose(fact, value, qual):
+    """The answer a reviewer judges and the benchmark stores.
+
+    Kept separate from `value` because the mechanical checks work on the parts: each of
+    "$33,360" and "per term" is a substring of the quote, while "$33,360 per term" is not
+    — the page writes them either side of other words. Composing after the checks keeps
+    the answer readable without weakening what was verified.
+    """
+    if fact in QUALIFIER and qual:
+        return QUALIFIER[fact][2].format(value=value, qual=qual)
+    return value
+
+
+MONEY = re.compile(r"[$£€¥]\s?\d[\d,. ]{2,}|\b\d[\d,. ]{3,}\s?(?:usd|eur|gbp|chf|sek|aed)\b",
+                   re.I)
 
 
 def suspicions(fact, quote, value):
@@ -345,6 +620,30 @@ def suspicions(fact, quote, value):
         phrases, reason = SUSPECT[name]
         if any(phrase in lowered for phrase in phrases):
             found.append(reason)
+
+    # Harvard's fee page lists a rate card — one course $8,438, two $16,876, three
+    # $25,314, four $33,752 — followed by a note about needing "2 courses per term".
+    # Two candidates came out of it pairing a per-course rate with that note's period,
+    # and both were real figures in real text. Nothing mechanical separates a fee period
+    # from a workload period here, so the honest move is to tell the reviewer the quote
+    # holds a choice of amounts rather than a single one.
+    if fact == "tuition" and len(MONEY.findall(quote)) > 1:
+        found.append("the quote lists several amounts — check this is the one the "
+                     "question asks for, and that the period belongs to it")
+
+    # The same failure with test names. "an overall IELTS score of 6.5 or a TOEFL score
+    # of 4.5" yielded "IELTS 4.5", and "a minimum score of 7 on the IELTS Academic test
+    # and a minimum Speaking score of 6.5" yielded "IELTS 6.5" — the speaking sub-score.
+    # One sentence, two tests or two scores, and the pairing is a guess.
+    if fact == "english":
+        tests = {name for name, wordings in TEST_FAMILIES.items()
+                 if any(w in lowered for w in wordings)}
+        if len(tests) > 1:
+            found.append("the quote names more than one test — check the score belongs "
+                         "to the test given, not the other one")
+        elif len(re.findall(r"\b\d{1,3}(?:\.\d)?\b", quote)) > 1:
+            found.append("the quote states more than one score — check this is the "
+                         "overall minimum, not a sub-score or an older scale")
     return found
 
 
@@ -371,19 +670,50 @@ def corrupt(value, quote, rng):
     return rng.choice(alternatives)
 
 
-def run():
+LEDGER = Path("data/extraction_log.jsonl")
+
+
+def ledger_key(slug, snapshot, asked):
+    """What makes an extraction call worth repeating.
+
+    A call is determined by the archived bytes and the fields requested, so if neither
+    changed, calling again can only produce what the content-level dedupe throws away.
+    The snapshot digest rather than its name: re-archiving a page that has since changed
+    writes the same filename, and that call *is* worth making again.
+    """
+    digest = hashlib.sha256(snapshot.read_bytes()).hexdigest()[:16]
+    return f"{slug}|{digest}|{','.join(sorted(asked))}"
+
+
+def load_ledger():
+    done = {}
+    if LEDGER.exists():
+        for line in LEDGER.read_text(encoding="utf-8").splitlines():
+            if line.strip():
+                entry = json.loads(line)
+                done[entry["key"]] = entry
+    return done
+
+
+def run(force=False, only=None):
     rows = read_pages()
     if not rows:
         return 1
 
     from collect import snapshot_path
 
-    existing, decided = set(), 0
+    existing, seen_content, decided = set(), set(), 0
     if CANDIDATES.exists():
         for line in CANDIDATES.read_text(encoding="utf-8").splitlines():
             if line.strip():
                 row = json.loads(line)
                 existing.add(row["id"])
+                # Identity is the fact plus what was said about it. Keying only on the
+                # id let a second run re-propose a byte-identical candidate under an
+                # -alt suffix, so the reviewer judged the same sentence twice and the
+                # duplicate then looked like a conflict at import time.
+                seen_content.add((row.get("base_id", row["id"]),
+                                  normalise(row["value"]), normalise(row["quote"])))
                 decided += bool(row.get("decision"))
 
     # This appends and skips ids already present, so re-running never loses a decision.
@@ -415,19 +745,33 @@ def run():
             print(f"    {role}: {url}")
         print("  Fix the level-specific rows in data/pages.csv, or reject those candidates.\n")
 
+    # Every run used to call the extractor on all 103 archived pages, because duplicates
+    # were only detected from the *response*. The request was spent either way, so a run
+    # that produced nothing new still consumed the day's free quota, and the last
+    # institutions in the list were never reached. Record what has been asked, and ask
+    # only for what is new.
+    done = load_ledger()
+    skipped_done = 0
+
     rng = random.Random(CONTROL_SEED)
     produced = rejected_quote = rejected_value = rejected_context = controls = 0
+    rejected_qualifier = rejected_cycle = widened = 0
+    duplicates = unusable = 0
 
     CANDIDATES.parent.mkdir(parents=True, exist_ok=True)
-    with CANDIDATES.open("a", encoding="utf-8") as out:
+    LEDGER.parent.mkdir(parents=True, exist_ok=True)
+    with CANDIDATES.open("a", encoding="utf-8") as out, \
+            LEDGER.open("a", encoding="utf-8") as log:
         for row in rows:
             slug = slug_for(row)
             snapshot = snapshot_path(slug)
             if not snapshot.exists():
                 continue
+            if only and not any(part in slug for part in only):
+                continue
 
             text = page_text(snapshot)
-            haystack = normalise(text)
+            haystack, haystack_index = normalise_indexed(text)
             level_en = LEVELS[row["level"]][0]
             university = UNIVERSITIES[row["university"]][0]
 
@@ -437,10 +781,16 @@ def run():
             if not wanted:
                 continue
 
+            key = ledger_key(slug, snapshot, wanted)
+            if not force and key in done:
+                skipped_done += 1
+                continue
+
             print(f"{slug} ... ", end="", flush=True)
             try:
-                found = call_extractor(text[:MAX_PAGE_CHARS], level_en, university, wanted,
-                                       PROGRAMS[row["university"]][row["level"]])
+                found, note = call_extractor(text[:MAX_PAGE_CHARS], level_en, university,
+                                            wanted,
+                                            PROGRAMS[row["university"]][row["level"]])
             except urllib.error.HTTPError as exc:
                 detail = exc.read().decode("utf-8", "replace")
                 # A free tier answers 429 both for "too fast" and "done for today", and
@@ -468,6 +818,10 @@ def run():
                     continue
 
                 base_id = f"{row['university']}-{row['level']}-{fact}"
+                fingerprint = (base_id, normalise(value), normalise(quote))
+                if fingerprint in seen_content:
+                    duplicates += 1
+                    continue
                 item_id, suffix = base_id, 2
                 while item_id in existing:
                     item_id = f"{base_id}-alt{suffix}"
@@ -492,6 +846,47 @@ def run():
                 if len(normalise(quote)) < len(normalise(value)) + MIN_QUOTE_CONTEXT:
                     rejected_context += 1
                     continue
+                # Check 4, for fields whose value means nothing alone: the qualifier is
+                # held to the same standard as the value. Without it, the one part of the
+                # gold answer nobody checked would be the part supplied from the model's
+                # own knowledge — the line this pipeline does not cross.
+                qual, was_widened, extra_flags = "", False, []
+                if fact in QUALIFIER:
+                    qual = str(entry.get(QUALIFIER[fact][0], "")).strip()
+                    if not qual:
+                        rejected_qualifier += 1
+                        continue
+                    if normalise(qual) not in normalise(quote):
+                        # Widening only ever grows the span, so checks 1-3 still hold on
+                        # the result and the value is still inside it. The qualifier is
+                        # replaced by the page's own wording of the same period, which is
+                        # the only wording allowed to appear in a quote.
+                        wider = widen(quote, qual, text, haystack, haystack_index, fact)
+                        if wider is None:
+                            rejected_qualifier += 1
+                            continue
+                        quote, qual = wider[0], wider[1].strip()
+                        was_widened = True
+                        if wider[2]:
+                            extra_flags.append(
+                                "the period may belong to a different row — this figure "
+                                "sits among several others on the page")
+                cycle_raw = cycle_en = cycle_ru = ""
+                if fact in CYCLE_FACTS:
+                    # Checked against the page, not the quote. The intake is normally a
+                    # heading above the fee table, so demanding it inside the same quote
+                    # made most fee pages unextractable. It is still verbatim from the
+                    # archive, and unlike the value it scopes the question rather than
+                    # answering it — the reviewer sees it and rejects a wrong year.
+                    cycle_raw = str(entry.get("cycle", "")).strip()
+                    if not cycle_raw or normalise(cycle_raw) not in haystack:
+                        rejected_cycle += 1
+                        continue
+                    phrasing = canonical_cycle(cycle_raw)
+                    if phrasing is None:
+                        rejected_cycle += 1
+                        continue
+                    cycle_en, cycle_ru = phrasing
 
                 is_control, shown = False, value
                 if rng.random() < CONTROL_RATE:
@@ -504,7 +899,7 @@ def run():
                 # because the reviewer sometimes overrules the heuristic and a silent
                 # drop would hide that. Controls are never marked — that would give them
                 # away and the check would stop measuring anything.
-                flags = [] if is_control else suspicions(fact, quote, shown)
+                flags = [] if is_control else suspicions(fact, quote, shown) + extra_flags
 
                 out.write(json.dumps({
                     "id": item_id,
@@ -514,6 +909,12 @@ def run():
                     "level": row["level"],
                     "fact": fact,
                     "value": shown,
+                    "qualifier": qual,
+                    "quote_widened": was_widened,
+                    "cycle_quoted": cycle_raw,
+                    "cycle_en": cycle_en,
+                    "cycle_ru": cycle_ru,
+                    "answer": compose(fact, shown, qual),
                     "true_value": value if is_control else None,
                     "quote": quote,
                     "source_url": row["url"],
@@ -524,16 +925,46 @@ def run():
                     "decision": None,
                 }, ensure_ascii=False) + "\n")
                 existing.add(item_id)
+                seen_content.add(fingerprint)
                 kept += 1
                 produced += 1
 
-            print(f"{kept} candidate(s)")
+            # Written only after the call returned, so a run interrupted mid-page repeats
+            # that page rather than silently skipping it next time.
+            log.write(json.dumps({
+                "key": key, "slug": slug, "facts": sorted(wanted),
+                "returned": len(found), "kept": kept,
+                "extractor": EXTRACTOR, "at": date.today().isoformat(),
+            }, ensure_ascii=False) + "\n")
+            log.flush()
+
+            if note:
+                print(f"{kept} candidate(s)  [{note}]")
+                unusable += 1
+            else:
+                print(f"{kept} candidate(s)")
             time.sleep(4)   # free-tier pacing
 
     print(f"\n{produced} candidate(s) written to {CANDIDATES}")
+    if skipped_done:
+        print(f"  {skipped_done} page(s) skipped: already extracted from the same "
+              f"snapshot for the same fields (--force to redo)")
     print(f"  {rejected_quote} discarded: quote not found in the archived page")
     print(f"  {rejected_value} discarded: value not inside its own quote")
     print(f"  {rejected_context} discarded: quote had no context beyond the value itself")
+    if rejected_qualifier:
+        print(f"  {rejected_qualifier} discarded: the period or test name was missing "
+              f"from the quote")
+    if widened:
+        print(f"  {widened} quote(s) widened from the archive to take in the period "
+              f"or test name")
+    if rejected_cycle:
+        print(f"  {rejected_cycle} discarded: the quote did not say which intake the "
+              f"value is for")
+    print(f"  {duplicates} skipped: already proposed with the same value and quote")
+    if unusable:
+        print(f"  {unusable} page(s) returned nothing usable — see the bracketed "
+              f"reason above; that is a pipeline fault, not an empty page")
     print(f"  {controls} of the kept candidates are deliberately corrupted controls")
     print("\nNext:  python3 src/verify.py")
     return 0
@@ -543,8 +974,17 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("command", choices=["init", "fetch", "run"])
+    parser.add_argument("--force", action="store_true",
+                        help="re-extract pages already in the ledger")
+    parser.add_argument("--only", metavar="SUBSTRINGS",
+                        help="comma-separated; restrict to page slugs containing any of "
+                             "them, e.g. --only mit,kaist. Use it to spend a limited "
+                             "daily quota on the cells the design is short of.")
     args = parser.parse_args()
-    return {"init": init, "fetch": fetch, "run": run}[args.command]()
+    if args.command == "run":
+        only = [s.strip() for s in args.only.split(",")] if args.only else None
+        return run(force=args.force, only=only)
+    return {"init": init, "fetch": fetch}[args.command]()
 
 
 if __name__ == "__main__":

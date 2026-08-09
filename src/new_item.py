@@ -132,15 +132,27 @@ FACTS = {
         "What is the final application deadline for {prog} at {uni} for {cycle} entry?",
         "Какой финальный дедлайн подачи документов на {prog_ru} в {uni} для поступления {cycle_ru}?",
     ),
+    # Both of these used to name the unit the answer had to come in — "annual" fee, a
+    # "TOEFL iBT" score. Universities do not agree on either: MIT publishes tuition per
+    # term, KTH for the full programme, and plenty of places list IELTS and no TOEFL. A
+    # question phrased around one convention has no answer on the official pages of the
+    # universities that use another, and since convention travels with country and tier,
+    # dropping them would have turned the tier comparison into a comparison of publishing
+    # habits. So the question asks for the unit instead of assuming it, and the unit is
+    # quoted from the page like everything else.
     "tuition": (
         "tuition", "annual",
-        "What is the annual tuition fee for {prog} at {uni} for {cycle} entry?",
-        "Какова годовая стоимость обучения на {prog_ru} в {uni} для поступления {cycle_ru}?",
+        "What is the tuition fee for {prog} at {uni} for {cycle} entry? "
+        "State the amount and the period it covers, as the university states them.",
+        "Какова стоимость обучения на {prog_ru} в {uni} для поступления {cycle_ru}? "
+        "Укажите сумму и период, за который она взимается, как их указывает университет.",
     ),
     "english": (
         "test_requirement", "annual",
-        "What is the minimum TOEFL iBT score required for admission to {prog} at {uni} for {cycle} entry?",
-        "Какой минимальный балл TOEFL iBT нужен для поступления на {prog_ru} в {uni} {cycle_ru}?",
+        "What is the minimum English language test score required for admission to "
+        "{prog} at {uni} for {cycle} entry? Name the test and the score.",
+        "Какой минимальный балл языкового теста нужен для поступления на {prog_ru} "
+        "в {uni} {cycle_ru}? Назовите тест и балл.",
     ),
     "documents": (
         "document_list", "annual",

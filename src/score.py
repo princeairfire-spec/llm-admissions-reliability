@@ -36,6 +36,9 @@ import unicodedata
 from collections import defaultdict
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).parent))
+from qualifiers import families_for, family_of  # noqa: E402
+
 RAW_DIR = Path("results/raw")
 SCORED_PATH = Path("results/scored.jsonl")
 
@@ -211,6 +214,36 @@ def amount_in_bare_numbers(target_money, answer):
     return any(amount in answer_numbers for _, amount in target_money)
 
 
+def qualifier_agrees(answer, item, target):
+    """Does the answer carry the same period, or the same test, as `target`?
+
+    Items whose value is meaningless alone (DD-008) store the two halves separately. The
+    numeric comparison alone would mark "$33,360 per year" correct against a gold answer
+    of "$33,360 per term", which is exactly the mistake a benchmark about factual
+    reliability should be catching.
+
+    Checked against the target that matched, not against the gold answer, because the
+    accepted variants can carry a different qualifier and still be right. TU Delft states
+    "TOEFL iBT 90, or IELTS 6.5": both answer the question. With the gold answer's
+    qualifier used for every comparison, a model saying "IELTS 6.5" would match the
+    variant on its number and then fail on the test name, and be scored incorrect for
+    giving one of the two answers the university itself publishes.
+
+    An answer that names no period or test at all is not credited: the question asks for
+    it in so many words.
+    """
+    if not item.get("answer_parts"):
+        return True
+    families = families_for(item["fact_type"])
+    target_family = family_of(target, families)
+    if target_family is None:
+        # Worded in a way these tables do not cover. Require the words themselves rather
+        # than silently waiving the requirement.
+        qualifier = (item["answer_parts"] or {}).get("qualifier", "")
+        return bool(qualifier) and normalise(qualifier) in normalise(answer)
+    return family_of(answer, families) == target_family
+
+
 def is_abstention(answer):
     if not answer.strip():
         return False   # an empty answer is a failure to respond, not a refusal
@@ -234,7 +267,8 @@ def score_one(row, item):
         label, error_type = "NA", None
     else:
         targets = [item["gold_answer"], *item.get("acceptable_variants", [])]
-        if any(matches(answer, target) for target in targets):
+        if any(matches(answer, target) and qualifier_agrees(answer, item, target)
+               for target in targets):
             label, error_type = "CO", None
         else:
             label = "IN"

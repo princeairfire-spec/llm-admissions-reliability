@@ -234,3 +234,132 @@ plausibly know. A mix is required: some facts from the current published cycle
 **To be verified in the 20-question pilot** before committing to the full sample: if
 pilot accuracy on annual facts is at zero across all tiers, the volatility axis needs
 re-specification before Phase 2 begins, not after.
+
+## DD-008 — The question must ask in the unit the university publishes
+*Decided 2026-08-09, after the annual cells stayed empty through two extraction rounds.*
+
+Two questions named the unit the answer had to arrive in: "the **annual** tuition fee",
+"the minimum **TOEFL iBT** score". Universities do not agree on either. MIT's registrar
+publishes graduate tuition per term, KTH publishes one figure for the full programme,
+Cambridge publishes per year; a large share of institutions state IELTS and no TOEFL.
+
+The extractor is forbidden to compute, so on a page that states only a per-term figure
+there is no annual figure to copy and the correct response is to return nothing. It did.
+Every fee page returned nothing, which read as "these pages carry no facts" — the one
+result that stops you looking.
+
+The yield loss was the smaller problem. **Publishing convention travels with country and
+with sector, and so with `coverage_tier`.** Admitting only the universities that happen
+to publish in the assumed unit would have made the tier comparison partly a comparison of
+publishing habits, and nothing in the analysis would have revealed it.
+
+So the question asks for the unit instead of assuming it — "state the amount and the
+period it covers", "name the test and the score" — and the unit is quoted from the page
+like every other part of the answer. `$33,360 per term` and `IELTS 7.0` are answers; the
+model under test has to produce the qualifier too, and gets no credit for a bare number.
+
+**Mechanically:** the amount and the qualifier are checked separately, each as a substring
+of the quote, because the page writes them either side of other words and the composed
+string appears nowhere. Composition happens after the checks, so the answer is readable
+without weakening what was verified.
+
+**Widening.** Requiring both parts inside one model-supplied quote discarded 15 of 22
+candidates in the first run after this change: the amount sits in one table cell and
+"per term" in the next, so no single narrow quote holds both, and an extractor told to
+omit what it cannot satisfy correctly omits.
+
+Rather than relax the check, the quote is **widened from the archive**: the code locates
+the quote in the snapshot and extends the span outward, up to 320 characters, until the
+qualifier is inside it. Substring arithmetic over the archived bytes — the model does not
+choose the wider span, and cannot use widening to reach a period belonging to a different
+table. Candidates carry `quote_widened` so the effect is measurable rather than assumed.
+
+The guarantee is therefore unchanged and worth stating precisely: **every part of the
+answer appears inside the quote that was shown to the person who accepted it.**
+
+## DD-009 — The intake is read off the page, not assumed from the calendar
+*Decided 2026-08-09.*
+
+The extraction prompt fixed the cycle at `Fall 2027` and instructed the extractor to omit
+any value not tied to it. In August 2026 the pages that exist state fees for the
+2026–2027 academic year, so this suppressed cycle-dependent extraction almost entirely —
+the visible symptom was 18 of 23 items being `stable` facts.
+
+Asking a question about an intake the university has not published yet is not a hard
+question, it is a question with no ground truth on the source the protocol treats as
+authoritative.
+
+Each cycle-stamped candidate now carries the intake **copied from its own page**, and the
+question is rendered for that intake. Question wording is derived from the quoted string
+by regex, never by a model, so no unquoted text reaches the benchmark.
+
+The intake is checked against the whole archived page rather than against the quote: on a
+fee table the year is a heading above the figures, and requiring both inside one quote
+made most fee pages unextractable. It is weaker locality than the value's own check, and
+it is compensated by the reviewer seeing the intake and rejecting a wrong year — recorded
+here so the paper states it rather than implies a stronger guarantee than it has.
+
+## DD-010 — Level-wide facts are not programme-specific facts
+*Decided 2026-08-09.*
+
+An earlier rule told the extractor to omit anything the page stated "for the institution
+in general", added after institution-level questions turned out to have no answer. It is
+right for duration and language of instruction, which genuinely differ per programme. It
+is wrong for tuition, deadlines, English requirements, required documents and campus
+city, which universities normally set for a whole level of study — MIT's fee page never
+says "Electrical Engineering and Computer Science", and under the old rule it was
+therefore unusable.
+
+Facts are now split into programme-specific and level-wide, and the prompt says which
+kind it is asking for. For a level-wide fact, a value stated for all graduate applicants
+applies to the named programme unless the page states a different one specifically for it.
+
+## DD-011 — Inter-annotator agreement instead of waiting for a second pass
+*Decided 2026-08-09.*
+
+The reliability number was to come from re-reviewing a sample days later. That gap is not
+a formality: asked the same question the same day, a reviewer remembers the answer, and
+the number measures memory while being reported as reliability.
+
+A second annotator needs no gap. They never saw the first decisions, so their agreement is
+independent on the day it is collected — and it is the stronger claim for a dataset one
+person built. `--packet` exports a shuffled sample carrying no trace of the first decision,
+with controls unmarked so the second annotator's attention is measured on the same footing.
+
+Reported as raw agreement **and** Cohen's kappa. Raw agreement flatters any dataset that
+is mostly accepts, and this one is roughly 62% accepts.
+
+The intra-annotator second pass is still planned and still needs its gap. The two measure
+different things, and the paper reports whichever it has, labelled for what it is.
+
+## DD-012 — A discovered page is fetched and tested before it enters the sheet
+*Decided 2026-08-09.*
+
+Page discovery scores candidate URLs on their wording. That is enough to find plausible
+pages and not enough to find correct ones. In one pass it proposed:
+
+- `…/exemption-from-tuition-fees` for a fee row — a waiver policy, no figures;
+- `…/curriculum-information-not-found` for a programme row;
+- `…/students/accommodation/prospective/ug/how-to-apply/` for an admissions row.
+
+The third is the one that matters. It is a real page with real dates and the words "how
+to apply", about applying for **a room**. Nothing downstream would have caught it: the
+extractor would have found a genuine deadline, the quote would have been verbatim, all
+five mechanical checks would have passed, and a reviewer skimming would have seen a real
+date answering a question about deadlines.
+
+Each proposal is now fetched and must show **both** a signature of the fact and its topic
+— a currency with a figure *and* the word tuition; a date *and* an application-deadline
+phrase. Regexes over the page text, in `src/qualifiers.py`, shared with the extractor and
+the scorer so the three stages cannot drift apart. URLs in sections that borrow admissions
+vocabulary for something else (accommodation, jobs, library, conferences) are rejected on
+sight.
+
+**What this is really protecting.** Not HTTP requests, and not even extraction quota. The
+reviewer is the only unparallelisable step in the pipeline, and every junk page spends a
+slot in that queue. Twenty pages were rejected in the first run under this rule.
+
+**Known limit:** the gate tests that a page states *a* fact of the right kind, not that it
+states it for the right programme or the right level. Those remain the reviewer's job, and
+the level warning printed before extraction remains the only automatic signal for the
+second of them.

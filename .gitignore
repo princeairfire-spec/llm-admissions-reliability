@@ -13,3 +13,6 @@ venv/
 
 # notebook noise
 .ipynb_checkpoints/
+
+# local safety copies made before destructive edits
+*.bak
