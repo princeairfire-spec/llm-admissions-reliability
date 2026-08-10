@@ -184,8 +184,10 @@ def check_fields(line_number, item):
 
 
 def check_duplicates(items):
-    """Two kinds of duplicate: a repeated id, and the same question asked twice."""
-    errors = []
+    """Two kinds of duplicate: a repeated id, and the same question asked twice.
+
+    Returns (errors, warnings)."""
+    errors, warnings = [], []
 
     ids = Counter(item.get("id") for _, item in items)
     for item_id, count in ids.items():
@@ -193,15 +195,21 @@ def check_duplicates(items):
             errors.append(f"duplicate id {item_id!r} appears {count} times")
 
     # The same fact about the same university asked twice inflates whichever cell it
-    # lands in and makes the items non-independent.
+    # lands in and makes the items non-independent. Keyed on the question, not on
+    # (university, fact_type, answer): TUM legitimately requires IELTS 6.5 for both the
+    # BSc and the MSc — same answer, two different questions, two valid items. What is
+    # never valid is one question with two rows, and the question check below owns that.
+    # The value-level collision is still worth a warning, because two items whose gold
+    # answers coincide are correlated evidence even when the questions differ.
     facts = Counter(
         (item.get("university"), item.get("fact_type"), item.get("gold_answer"))
         for _, item in items
     )
     for (university, fact_type, answer), count in facts.items():
         if count > 1:
-            errors.append(
-                f"duplicate fact: {university} / {fact_type} / {answer!r} appears {count} times"
+            warnings.append(
+                f"{university} / {fact_type} / {answer!r} appears {count} times "
+                f"(different levels?) — the items are correlated, not independent"
             )
 
     questions = Counter(item.get("question_en", "").strip().lower() for _, item in items)
@@ -209,7 +217,7 @@ def check_duplicates(items):
         if count > 1 and question:
             errors.append(f"duplicate question_en ({count}x): {question[:70]}...")
 
-    return errors
+    return errors, warnings
 
 
 def report_balance(items):
@@ -297,8 +305,9 @@ def main():
 
     for line_number, item in items:
         errors.extend(check_fields(line_number, item))
-    errors.extend(check_duplicates(items))
-    warnings = report_balance(items)
+    duplicate_errors, duplicate_warnings = check_duplicates(items)
+    errors.extend(duplicate_errors)
+    warnings = duplicate_warnings + report_balance(items)
 
     if errors:
         print(f"\n{len(errors)} ERROR(S) — these block the dataset:")
