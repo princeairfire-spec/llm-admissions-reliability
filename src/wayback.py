@@ -50,6 +50,9 @@ def find(url, months_back):
     # phase looks broken when it is merely impatient.
     for pause in (0, 20, 45, 90):
         if pause:
+            # Say that the wait is deliberate. A silent ninety-second sleep is
+            # indistinguishable from a hang to the person watching the terminal.
+            print(f"    …archive is rate-limiting, waiting {pause}s", flush=True)
             time.sleep(pause)
         try:
             with urllib.request.urlopen(f"{API}?{query}", timeout=TIMEOUT) as response:
@@ -102,6 +105,8 @@ def rows_from_sheet():
 BENCHMARK = Path("data/benchmark.jsonl")
 PRIOR_DIR = Path("data/snapshots/prior")
 PRIOR_CANDIDATES = Path("data/prior_candidates.jsonl")
+LOOKUP_MISSES = Path("data/prior_lookup_misses.json")
+MISS_TTL_DAYS = 7   # the Archive gains captures over time; a miss is not forever
 
 # fact_type as stored on benchmark items -> the fact key extract.py works in.
 FACT_KEY = {"deadline": "deadline", "tuition": "tuition",
@@ -159,12 +164,27 @@ def fill(months_back):
         # cost-attendance-2025-2026. For those, the previous cycle is a sibling URL —
         # decrement both years and ask the Archive for that page instead.
         lookup_url = prior_cycle_url(item["source_url"]) or item["source_url"]
+
+        # A lookup that found nothing costs ninety seconds of polite retries against a
+        # rate-limited API, and it used to cost them again on every run — the reviewer
+        # sat through the same misses each time they came back to the review screens.
+        # Remember misses for a week; the Archive does gain captures, just not hourly.
+        misses = {}
+        if LOOKUP_MISSES.exists():
+            misses = json.loads(LOOKUP_MISSES.read_text(encoding="utf-8"))
+        missed_on = misses.get(item["id"])
+        if missed_on and (date.today() - date.fromisoformat(missed_on)).days < MISS_TTL_DAYS:
+            print(f"  {item['id']}: no capture as of {missed_on}, not retrying yet")
+            continue
+
         if lookup_url != item["source_url"]:
             print(f"  {item['id']}: year-stamped URL, looking for {lookup_url}")
 
         archived, stamp = find(lookup_url, months_back)
         if not archived:
             print(f"  {item['id']}: {stamp}")
+            misses[item["id"]] = date.today().isoformat()
+            LOOKUP_MISSES.write_text(json.dumps(misses, indent=1), encoding="utf-8")
             continue
         # A capture younger than ~9 months documents the current cycle, not the prior
         # one. Recording it would fabricate a "did not change" — worse than a blank.

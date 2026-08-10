@@ -32,7 +32,8 @@ REQUIRED_FIELDS = [
     "verified_by", "verification_round", "notes",
 ]
 
-OPTIONAL_FIELDS = ["round1_gold_answer", "answer_parts", "cycle_quoted"]
+OPTIONAL_FIELDS = ["round1_gold_answer", "answer_parts", "cycle_quoted",
+                   "prior_source"]
 
 ALLOWED_VALUES = {
     "coverage_tier": {"high", "mid", "low"},
