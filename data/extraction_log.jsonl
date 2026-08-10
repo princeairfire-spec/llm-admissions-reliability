@@ -282,3 +282,15 @@
 {"key": "chula-pg-program|f6e3f8cbbd5981ed|duration,english,language,tuition", "slug": "chula-pg-program", "facts": ["duration", "english", "language", "tuition"], "returned": 4, "kept": 1, "extractor": "gemini-3.5-flash-lite", "at": "2026-08-10"}
 {"key": "aalto-pg-program|9153a4300c2bc17a|duration,language,tuition", "slug": "aalto-pg-program", "facts": ["duration", "language", "tuition"], "returned": 4, "kept": 0, "extractor": "gemini-3.5-flash-lite", "at": "2026-08-10"}
 {"key": "yale-pg-program|ad54389f56dd7ae9|duration,english,language", "slug": "yale-pg-program", "facts": ["duration", "english", "language"], "returned": 4, "kept": 2, "extractor": "gemini-3.5-flash-lite", "at": "2026-08-10"}
+{"key": "kth-pg-program|b802f2256c359837|duration,language", "slug": "kth-pg-program", "facts": ["duration", "language"], "returned": 2, "kept": 2, "extractor": "gemini-3.5-flash-lite", "at": "2026-08-10"}
+{"key": "warsaw-ug-program|bcf01bd396caba10|duration,language", "slug": "warsaw-ug-program", "facts": ["duration", "language"], "returned": 2, "kept": 0, "extractor": "gemini-3.5-flash-lite", "at": "2026-08-10"}
+{"key": "warsaw-pg-program|8b7b530db20cf5dd|duration,language", "slug": "warsaw-pg-program", "facts": ["duration", "language"], "returned": 2, "kept": 2, "extractor": "gemini-3.5-flash-lite", "at": "2026-08-10"}
+{"key": "malaya-ug-program|47df6f426dbe8ab1|duration,language", "slug": "malaya-ug-program", "facts": ["duration", "language"], "returned": 0, "kept": 0, "extractor": "gemini-3.5-flash-lite", "at": "2026-08-10"}
+{"key": "auca-ug-about|fb8840ce40018f19|city", "slug": "auca-ug-about", "facts": ["city"], "returned": 1, "kept": 1, "extractor": "gemini-3.5-flash-lite", "at": "2026-08-10"}
+{"key": "warsaw-pg-about|0fe43ca3d18b6de7|city", "slug": "warsaw-pg-about", "facts": ["city"], "returned": 0, "kept": 0, "extractor": "gemini-3.5-flash-lite", "at": "2026-08-10"}
+{"key": "malaya-ug-about|3f3d7e8782cd9d29|city", "slug": "malaya-ug-about", "facts": ["city"], "returned": 0, "kept": 0, "extractor": "gemini-3.5-flash-lite", "at": "2026-08-10"}
+{"key": "malaya-pg-about|3f3d7e8782cd9d29|city", "slug": "malaya-pg-about", "facts": ["city"], "returned": 0, "kept": 0, "extractor": "gemini-3.5-flash-lite", "at": "2026-08-10"}
+{"key": "kth-ug-program|2a5f0b28a237661c|duration,language", "slug": "kth-ug-program", "facts": ["duration", "language"], "returned": 3, "kept": 3, "extractor": "gemini-3.5-flash-lite", "at": "2026-08-10"}
+{"key": "chula-ug-about|8b81542a0a5a7bae|city", "slug": "chula-ug-about", "facts": ["city"], "returned": 0, "kept": 0, "extractor": "gemini-3.5-flash-lite", "at": "2026-08-10"}
+{"key": "aalto-ug-about|839f45f4ab4ddd7c|city", "slug": "aalto-ug-about", "facts": ["city"], "returned": 0, "kept": 0, "extractor": "gemini-3.5-flash-lite", "at": "2026-08-10"}
+{"key": "tum-ug-about|7c5ffab61a2ce8e0|city", "slug": "tum-ug-about", "facts": ["city"], "returned": 0, "kept": 0, "extractor": "gemini-3.5-flash-lite", "at": "2026-08-10"}
