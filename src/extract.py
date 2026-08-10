@@ -283,9 +283,28 @@ def slug_for(row):
     return f"{row['university']}-{row['level']}-{row['role']}"
 
 
-def fetch():
-    """Archive every page in the list. One snapshot per page, reused by many facts."""
-    from collect import fetch as fetch_one, snapshot_path
+def latest_snapshot(slug):
+    """The newest archived copy for this slug, or None.
+
+    Snapshot names carry their capture date, and code used to look them up by
+    *today's* name — so the morning after a capture, extraction silently saw no
+    snapshots at all, and fetch re-downloaded the whole archive because nothing
+    "existed". A dated name is the evidence format; the lookup has to be a search,
+    not a reconstruction. ISO dates sort lexically, so max() is the newest.
+    """
+    matches = sorted(SNAPSHOTS.glob(f"{slug}-????-??-??.html"))
+    return matches[-1] if matches else None
+
+
+def fetch(refresh=False):
+    """Archive every page in the list. One snapshot per page, reused by many facts.
+
+    A snapshot, once taken, is reused until the row's URL changes or --refresh asks
+    for a new capture. Re-archiving daily is not just wasted bandwidth: new bytes give
+    the page a new digest, the extraction ledger treats it as unseen, and the daily
+    quota gets spent re-asking questions that were already answered.
+    """
+    from collect import fetch as fetch_one
 
     rows = read_pages()
     if not rows:
@@ -295,9 +314,9 @@ def fetch():
     saved = skipped = failed = superseded = 0
     for row in rows:
         slug = slug_for(row)
-        existing = snapshot_path(slug)
+        existing = latest_snapshot(slug)
 
-        if existing.exists():
+        if existing is not None and not refresh:
             # The snapshot name does not depend on the URL, so changing a URL in
             # pages.csv would otherwise leave the old page in place and be silently
             # reused. That is worse than a crash: the benchmark would record the new
@@ -700,8 +719,6 @@ def run(force=False, only=None):
     if not rows:
         return 1
 
-    from collect import snapshot_path
-
     existing, seen_content, decided = set(), set(), 0
     if CANDIDATES.exists():
         for line in CANDIDATES.read_text(encoding="utf-8").splitlines():
@@ -769,7 +786,7 @@ def run(force=False, only=None):
 
     rng = random.Random(CONTROL_SEED)
     produced = rejected_quote = rejected_value = rejected_context = controls = 0
-    rejected_qualifier = rejected_cycle = widened = 0
+    rejected_qualifier = rejected_cycle = widened = no_snapshot = 0
     duplicates = unusable = 0
 
     CANDIDATES.parent.mkdir(parents=True, exist_ok=True)
@@ -778,8 +795,9 @@ def run(force=False, only=None):
             LEDGER.open("a", encoding="utf-8") as log:
         for row in rows:
             slug = slug_for(row)
-            snapshot = snapshot_path(slug)
-            if not snapshot.exists():
+            snapshot = latest_snapshot(slug)
+            if snapshot is None:
+                no_snapshot += 1
                 continue
             if only and not any(part in slug for part in only):
                 continue
@@ -979,6 +997,9 @@ def run(force=False, only=None):
     if skipped_absent:
         print(f"  {skipped_absent} fact request(s) dropped before calling: the page "
               f"shows no signature of that fact")
+    if no_snapshot:
+        print(f"  {no_snapshot} page(s) have no snapshot yet — run: "
+              f"python3 src/extract.py fetch")
     print(f"  {rejected_quote} discarded: quote not found in the archived page")
     print(f"  {rejected_value} discarded: value not inside its own quote")
     print(f"  {rejected_context} discarded: quote had no context beyond the value itself")
@@ -1006,6 +1027,8 @@ def main():
     parser.add_argument("command", choices=["init", "fetch", "run"])
     parser.add_argument("--force", action="store_true",
                         help="re-extract pages already in the ledger")
+    parser.add_argument("--refresh", action="store_true",
+                        help="fetch: re-capture pages even if a snapshot exists")
     parser.add_argument("--only", metavar="SUBSTRINGS",
                         help="comma-separated; restrict to page slugs containing any of "
                              "them, e.g. --only mit,kaist. Use it to spend a limited "
@@ -1014,7 +1037,9 @@ def main():
     if args.command == "run":
         only = [s.strip() for s in args.only.split(",")] if args.only else None
         return run(force=args.force, only=only)
-    return {"init": init, "fetch": fetch}[args.command]()
+    if args.command == "fetch":
+        return fetch(refresh=args.refresh)
+    return init()
 
 
 if __name__ == "__main__":
