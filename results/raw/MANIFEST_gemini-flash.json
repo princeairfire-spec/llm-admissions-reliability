@@ -1,0 +1,16 @@
+{
+  "model": "gemini-3.6-flash",
+  "backend": "gemini",
+  "prompt_version": "v1_2026-08-07",
+  "effort": null,
+  "max_tokens": 1024,
+  "benchmark": "data/benchmark.jsonl",
+  "languages": [
+    "en",
+    "ru"
+  ],
+  "modes": [
+    "nosearch"
+  ],
+  "last_run_at": "2026-08-11T20:16:30.308008+00:00"
+}

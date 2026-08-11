@@ -82,12 +82,31 @@ def strip_confidence(text):
     return cleaned.strip(), confidence
 
 
+# Small written numbers, for durations and counts. Pages write "nine-month course" and
+# "one-calendar-year"; models overwhelmingly answer in digits. Both are the same fact,
+# and a scorer that cannot see that marks a correct answer wrong — observed three times
+# in the first 24 pilot answers.
+WORD_NUMBERS = {
+    "one": "1", "two": "2", "three": "3", "four": "4", "five": "5", "six": "6",
+    "seven": "7", "eight": "8", "nine": "9", "ten": "10", "eleven": "11", "twelve": "12",
+    "один": "1", "два": "2", "две": "2", "три": "3", "четыре": "4", "пять": "5",
+    "шесть": "6", "семь": "7", "восемь": "8", "девять": "9", "десять": "10",
+}
+
+
 def normalise(text):
-    """Reduce a string to a comparable form: lowercase, no accents, no punctuation."""
+    """Reduce a string to a comparable form: lowercase, no accents, no punctuation.
+
+    Hyphens become spaces — "first-class honours" and "first class honours" are one
+    wording, not two — and small written numbers become digits, so "nine-month" can meet
+    "9 months". Both changes apply to answer and gold alike, so nothing is asymmetric.
+    """
     text = unicodedata.normalize("NFKD", text.lower())
     text = "".join(c for c in text if not unicodedata.combining(c))
-    text = re.sub(r"[^\w\s./-]", " ", text)
-    return re.sub(r"\s+", " ", text).strip()
+    text = re.sub(r"[-–—]", " ", text)
+    text = re.sub(r"[^\w\s./]", " ", text)
+    words = [WORD_NUMBERS.get(w, w) for w in text.split()]
+    return " ".join(words)
 
 
 def extract_dates(text):
@@ -202,9 +221,11 @@ def matches(answer, target):
                     return True
         return amount_in_bare_numbers(target_money, answer)
 
-    target_numbers = extract_numbers(target)
+    # Numbers are pulled from the *normalised* strings, where "nine-month" has already
+    # become "9 month" — on the raw string a spelled-out number is invisible to \d.
+    target_numbers = extract_numbers(target_norm)
     if target_numbers and len(target_norm.split()) <= 3:
-        return bool(target_numbers & extract_numbers(answer))
+        return bool(target_numbers & extract_numbers(answer_norm))
 
     return target_norm in answer_norm
 

@@ -63,7 +63,9 @@ MAX_RETRIES = 4
 #        https://generativelanguage.googleapis.com/v1beta/models
 MODELS = {
     # Google AI Studio free tier. No card, no install.
-    "gemini-flash":     {"backend": "gemini", "id": "gemini-3.6-flash",      "rpm": 10, "rpd": 250},
+    # rpd measured, not documented: the free tier cut this model off after ~25
+    # requests in the pilot run of 2026-08-10.
+    "gemini-flash":     {"backend": "gemini", "id": "gemini-3.6-flash",      "rpm": 10, "rpd": 25},
     "gemini-flashlite": {"backend": "gemini", "id": "gemini-3.5-flash-lite", "rpm": 15, "rpd": 1000},
     "gemini-pro":       {"backend": "gemini", "id": "gemini-2.5-pro",        "rpm": 5,  "rpd": 100},
 
@@ -239,7 +241,9 @@ def ask(model_key, prompt_text, use_search):
             if exc.code == 429:
                 # A free tier returns 429 both for "too fast" and for "done for today".
                 # Only the message distinguishes them, and only one is worth waiting out.
-                if "PerDay" in detail or "per day" in detail.lower():
+                lowered = detail.lower()
+                if any(m in lowered for m in ("perday", "per day", "per_day", "daily",
+                                              "requests per model per day")):
                     raise DailyQuotaReached(detail) from exc
                 wait = 2 ** attempt * 15
                 print(f"    rate limited, waiting {wait}s", flush=True)
@@ -263,7 +267,7 @@ def ask(model_key, prompt_text, use_search):
 
     return {"answer_text": "", "stop_reason": None, "refusal_category": None,
             "searches_used": 0, "input_tokens": 0, "output_tokens": 0,
-            "error": f"failed after {MAX_RETRIES} attempts"}
+            "error": f"failed after {MAX_RETRIES} attempts", "rate_limited": True}
 
 
 # ---------------------------------------------------------------------------
@@ -278,14 +282,24 @@ def load_prompt(language):
 
 
 def already_done(output_path):
-    """Item ids already recorded in this file, so a resumed run skips them."""
+    """Item ids already *answered* in this file, so a resumed run skips them.
+
+    Rows that recorded an error do not count as answered. They used to: a run that hit
+    the daily cap wrote 72 error rows, and every later run skipped those items as
+    "already recorded" — the benchmark would have shipped with three quarters of one
+    condition permanently unasked, silently. An error row is a note that the question
+    still needs asking, and append-only stays true: the retry appends a fresh row, and
+    scoring reads the latest row per item.
+    """
     if not output_path.exists():
         return set()
     done = set()
     for line in output_path.read_text(encoding="utf-8").splitlines():
         if line.strip():
             try:
-                done.add(json.loads(line)["item_id"])
+                row = json.loads(line)
+                if not row.get("error"):
+                    done.add(row["item_id"])
             except (json.JSONDecodeError, KeyError):
                 continue   # a truncated final line from a hard kill; ignore it
     return done
@@ -319,6 +333,7 @@ def run(model_key, items, language, mode, dry_run):
 
     # Pace requests to stay under the per-minute cap rather than being throttled.
     pause = 60.0 / MODELS[model_key]["rpm"] if MODELS[model_key].get("rpm") else 0.5
+    consecutive_limited = 0
     template = load_prompt(language)
     RAW_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -335,6 +350,20 @@ def run(model_key, items, language, mode, dry_run):
                       f"tomorrow — finished answers are kept and skipped.")
                 print(f"  provider said: {str(exc)[:160]}")
                 return len(todo) - index + 1
+
+            # Three items in a row burning every retry on 429s is the daily cap in
+            # different words. Provider wording changes; the pattern does not. Stop
+            # instead of writing error rows through the whole plan — one run did exactly
+            # that for 72 questions before this check existed.
+            if result.get("rate_limited"):
+                consecutive_limited += 1
+                if consecutive_limited >= 3:
+                    print(f"\n  three consecutive items exhausted their retries on rate "
+                          f"limits — treating this as the daily cap.")
+                    print(f"  Re-run the same command tomorrow; error rows are retried.")
+                    return len(todo) - index + 1
+            else:
+                consecutive_limited = 0
 
             out.write(json.dumps({
                 "item_id": item["id"],
