@@ -63,11 +63,16 @@ MAX_RETRIES = 4
 #        https://generativelanguage.googleapis.com/v1beta/models
 MODELS = {
     # Google AI Studio free tier. No card, no install.
-    # rpd measured, not documented: the free tier cut this model off after ~25
-    # requests in the pilot run of 2026-08-10.
-    "gemini-flash":     {"backend": "gemini", "id": "gemini-3.6-flash",      "rpm": 10, "rpd": 25},
+    # rpd for 3.6-flash read off the provider's own 429 body on 2026-08-10:
+    # generate_content_free_tier_requests, limit 20.
+    "gemini-flash":     {"backend": "gemini", "id": "gemini-3.6-flash",      "rpm": 10, "rpd": 20},
     "gemini-flashlite": {"backend": "gemini", "id": "gemini-3.5-flash-lite", "rpm": 15, "rpd": 1000},
-    "gemini-pro":       {"backend": "gemini", "id": "gemini-2.5-pro",        "rpm": 5,  "rpd": 100},
+    # gemini-2.5-pro answers 404 "no longer available to new users" on this key —
+    # verified 2026-08-10. Replaced by the previous-generation flash and by Gemma,
+    # an open-weights model reached through the same API: a different class of
+    # participant, and the per-model exclusion rule (DD-007) is untouched.
+    "gemini-35flash":   {"backend": "gemini", "id": "gemini-3.5-flash",      "rpm": 10, "rpd": 0},
+    "gemma31b":         {"backend": "gemini", "id": "gemma-4-31b-it",        "rpm": 10, "rpd": 0},
 
     # Local models. Needs Ollama running; nothing else changes.
     "qwen14b":  {"backend": "ollama", "id": "qwen3:14b",  "rpm": 0, "rpd": 0},
