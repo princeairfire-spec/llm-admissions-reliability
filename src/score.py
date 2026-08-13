@@ -284,13 +284,20 @@ def score_one(row, item):
         label, error_type = "BLOCKED", None
     elif not answer.strip():
         label, error_type = "EMPTY", None
-    elif is_abstention(answer):
-        label, error_type = "NA", None
     else:
+        # Correctness is judged before abstention, not after. Gemma prefixes its answers
+        # with a scratchpad that restates the prompt's instructions — including the
+        # literal words "reply with exactly: I DON'T KNOW" — and an abstention check
+        # that runs first reads that quotation and files a correct answer as a refusal;
+        # 93 of 94 pilot answers were mislabelled that way. A response that commits to
+        # the right fact is an attempt, whatever hedging surrounds it, and the same rule
+        # is applied to every model symmetrically.
         targets = [item["gold_answer"], *item.get("acceptable_variants", [])]
         if any(matches(answer, target) and qualifier_agrees(answer, item, target)
                for target in targets):
             label, error_type = "CO", None
+        elif is_abstention(answer):
+            label, error_type = "NA", None
         else:
             label = "IN"
             prior = item.get("prior_year_answer")

@@ -1,0 +1,16 @@
+{
+  "model": "gemma-4-31b-it",
+  "backend": "gemini",
+  "prompt_version": "v1_2026-08-07",
+  "effort": null,
+  "max_tokens": 1024,
+  "benchmark": "data/benchmark.jsonl",
+  "languages": [
+    "en",
+    "ru"
+  ],
+  "modes": [
+    "nosearch"
+  ],
+  "last_run_at": "2026-08-13T08:49:50.847712+00:00"
+}
