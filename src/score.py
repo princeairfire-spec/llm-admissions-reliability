@@ -94,6 +94,37 @@ WORD_NUMBERS = {
 }
 
 
+# Russian wordings of the closed-class answers in this dataset: languages of
+# instruction and the campus cities of the 25 institutions. A Russian question
+# legitimately gets a Russian answer — «Английский» IS "English" — and without this
+# table the scorer manufactured a language effect out of its own monolingualism:
+# eight of nineteen Russian "confident errors" in the first full sweep were correct
+# answers written in Russian. Finite, checkable, and applied symmetrically.
+RU_ALIASES = {
+    "английский": "english", "английском": "english", "польский": "polish",
+    "тайский": "thai", "немецкий": "german", "русский": "russian",
+    "вьетнамский": "vietnamese", "индонезийский": "indonesian",
+    "дублин": "dublin", "болонья": "bologna", "стокгольм": "stockholm",
+    "мюнхен": "munich", "хельсинки": "helsinki", "эспоо": "espoo",
+    "варшава": "warsaw", "варшаве": "warsaw", "куала": "kuala", "лумпур": "lumpur",
+    "тэджон": "daejeon", "дэджон": "daejeon", "сингапур": "singapore",
+    "бангкок": "bangkok", "ханой": "hanoi", "бишкек": "bishkek",
+    "джакарта": "jakarta", "депок": "depok", "екатеринбург": "yekaterinburg",
+    "иннополис": "innopolis", "астана": "astana", "абу": "abu", "даби": "dhabi",
+    "кембридж": "cambridge", "оксфорд": "oxford", "лондон": "london",
+    "цюрих": "zurich", "делфт": "delft", "бостон": "boston", "кембридже": "cambridge",
+    "нью": "new", "хейвен": "haven", "стэнфорд": "stanford",
+}
+
+# normalise() strips combining marks, which decomposes й into и — «английский» arrives
+# at the lookup as «английскии». Register the stripped spelling of every key too, so
+# the table works regardless of where in the pipeline it is consulted.
+RU_ALIASES.update({
+    "".join(c for c in unicodedata.normalize("NFKD", k) if not unicodedata.combining(c)): v
+    for k, v in list(RU_ALIASES.items())
+})
+
+
 def normalise(text):
     """Reduce a string to a comparable form: lowercase, no accents, no punctuation.
 
@@ -105,7 +136,7 @@ def normalise(text):
     text = "".join(c for c in text if not unicodedata.combining(c))
     text = re.sub(r"[-–—]", " ", text)
     text = re.sub(r"[^\w\s./]", " ", text)
-    words = [WORD_NUMBERS.get(w, w) for w in text.split()]
+    words = [RU_ALIASES.get(w, WORD_NUMBERS.get(w, w)) for w in text.split()]
     return " ".join(words)
 
 
@@ -192,6 +223,32 @@ def extract_numbers(text):
     return values
 
 
+# Durations in months. "12 months", "one year" and — at the standard two-semester
+# year — "2 semesters" are the same span written in different units, and the pilot
+# marked all three pairings as confident errors. Semester=6 months is a convention,
+# not a law; where an institution's own calendar differs, the reviewer records the
+# equivalent wording as an acceptable variant instead (as was done for UI).
+DURATION_UNITS = {
+    "year": 12, "years": 12, "год": 12, "года": 12, "лет": 12,
+    "month": 1, "months": 1, "месяц": 1, "месяца": 1, "месяцев": 1,
+    "semester": 6, "semesters": 6, "семестр": 6, "семестра": 6, "семестров": 6,
+    "term": 6, "terms": 6,
+}
+
+
+def extract_durations(text_norm):
+    """Durations found in normalised text, in months."""
+    found = set()
+    # One optional word may sit between the number and the unit: pages write
+    # "one-calendar-year" and "2 full years", and after hyphen folding the unit is no
+    # longer adjacent to its number.
+    for value, unit in re.findall(
+        r"(\d+(?:\.\d+)?)\s*(?:\w+\s+)?(%s)\b" % "|".join(DURATION_UNITS), text_norm
+    ):
+        found.add(float(value) * DURATION_UNITS[unit])
+    return found
+
+
 def matches(answer, target):
     """Does `answer` contain the fact stated in `target`?
 
@@ -220,6 +277,10 @@ def matches(answer, target):
                 if amount == answer_amount and (answer_currency is None or answer_currency == currency):
                     return True
         return amount_in_bare_numbers(target_money, answer)
+
+    target_durations = extract_durations(target_norm)
+    if target_durations:
+        return bool(target_durations & extract_durations(answer_norm))
 
     # Numbers are pulled from the *normalised* strings, where "nine-month" has already
     # become "9 month" — on the raw string a spelled-out number is invisible to \d.
