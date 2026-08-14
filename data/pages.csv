@@ -21,7 +21,7 @@ mit,pg,program,"language,duration",https://gradadmissions.mit.edu/programs/,http
 mit,pg,about,city,https://www.mit.edu/about/,https://www.google.com/search?q=site:mit.edu+campus+location+city
 cambridge,ug,admissions,"deadline,documents,eligibility",https://www.undergraduate.study.cam.ac.uk/applying,https://www.google.com/search?q=site:cam.ac.uk+application+deadline+required+documents
 cambridge,ug,fees,tuition,https://www.undergraduate.study.cam.ac.uk/finance?ucam-ref=global-header,https://www.google.com/search?q=site:cam.ac.uk+tuition+fee+per+year+cost
-cambridge,ug,english,english,,https://www.google.com/search?q=site:cam.ac.uk+TOEFL+IELTS+minimum+score+english+language+requirement
+cambridge,ug,english,english,https://www.undergraduate.study.cam.ac.uk/apply/before/entry-requirements,https://www.google.com/search?q=site:cam.ac.uk+TOEFL+IELTS+minimum+score+english+language+requirement
 cambridge,ug,program,"language,duration",,https://www.google.com/search?q=site:cam.ac.uk+programme+duration+language+of+instruction
 cambridge,ug,about,city,https://www.cam.ac.uk/about-us,https://www.google.com/search?q=site:cam.ac.uk+campus+location+city
 cambridge,pg,admissions,"deadline,documents,eligibility",https://www.postgraduate.study.cam.ac.uk/courses/directory/cscsmpacs/requirements,https://www.google.com/search?q=site:cam.ac.uk+application+deadline+required+documents

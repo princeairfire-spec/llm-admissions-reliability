@@ -828,8 +828,15 @@ def run(force=False, only=None):
 
             key = ledger_key(slug, snapshot, wanted)
             if not force and key in done:
-                skipped_done += 1
-                continue
+                entry = done[key]
+                # The extractor is a sampled model: the same page that yields nothing
+                # today yielded three candidates on the next call (Cambridge's English
+                # page, observed directly). One zero-yield answer therefore earns one
+                # retry on a later run; a second zero is accepted as the page's verdict.
+                zero_yield = entry.get("returned") == 0 and entry.get("attempts", 1) < 2
+                if not zero_yield:
+                    skipped_done += 1
+                    continue
 
             print(f"{slug} ... ", end="", flush=True)
             try:
@@ -979,6 +986,7 @@ def run(force=False, only=None):
             log.write(json.dumps({
                 "key": key, "slug": slug, "facts": sorted(wanted),
                 "returned": len(found), "kept": kept,
+                "attempts": done.get(key, {}).get("attempts", 0) + 1,
                 "extractor": EXTRACTOR, "at": date.today().isoformat(),
             }, ensure_ascii=False) + "\n")
             log.flush()

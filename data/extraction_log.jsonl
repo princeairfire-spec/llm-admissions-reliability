@@ -294,3 +294,6 @@
 {"key": "chula-ug-about|8b81542a0a5a7bae|city", "slug": "chula-ug-about", "facts": ["city"], "returned": 0, "kept": 0, "extractor": "gemini-3.5-flash-lite", "at": "2026-08-10"}
 {"key": "aalto-ug-about|839f45f4ab4ddd7c|city", "slug": "aalto-ug-about", "facts": ["city"], "returned": 0, "kept": 0, "extractor": "gemini-3.5-flash-lite", "at": "2026-08-10"}
 {"key": "tum-ug-about|7c5ffab61a2ce8e0|city", "slug": "tum-ug-about", "facts": ["city"], "returned": 0, "kept": 0, "extractor": "gemini-3.5-flash-lite", "at": "2026-08-10"}
+{"key": "cambridge-ug-english|6aa79db0bbf5f226|english", "slug": "cambridge-ug-english", "facts": ["english"], "returned": 0, "kept": 0, "extractor": "gemini-3.5-flash-lite", "at": "2026-08-14"}
+{"key": "cambridge-ug-english|6aa79db0bbf5f226|english", "slug": "cambridge-ug-english", "facts": ["english"], "returned": 0, "kept": 0, "attempts": 1, "extractor": "gemini-3.5-flash-lite", "at": "2026-08-14"}
+{"key": "cambridge-ug-english|6aa79db0bbf5f226|english", "slug": "cambridge-ug-english", "facts": ["english"], "returned": 3, "kept": 1, "attempts": 2, "extractor": "gemini-3.5-flash-lite", "at": "2026-08-14"}
