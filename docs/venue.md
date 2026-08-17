@@ -1,6 +1,8 @@
 # Target venue
 
-Checked 2026-08-09 against the workshop's own pages (tai-eval.github.io, /cfp).
+Checked 2026-08-09; re-verified 2026-08-17 against the workshop's own pages
+(tai-eval.github.io, /cfp) — all dates unchanged, but the site labels them
+"indicative"; re-check in the final week before submitting.
 
 **TAE (Trust-AI-Eval): Can We Trust AI Evaluation?** — NeurIPS 2026 workshop, Sydney,
 11–12 December 2026.
@@ -9,6 +11,8 @@ Checked 2026-08-09 against the workshop's own pages (tai-eval.github.io, /cfp).
 |---|---|
 | Submission deadline | **29 August 2026, AoE** |
 | Notification | 22 September 2026 |
+| Review deadline (their side) | 14 September 2026 |
+| Final program posted | 27 September 2026 |
 | Format | up to **8 pages** excluding references and appendices |
 | Template | NeurIPS 2026 LaTeX, `\usepackage[dblblindworkshop]{neurips_2026}`, workshop title "TAE (Trust-AI-Eval): Can We Trust AI Evaluation?" |
 | Review | double-blind, up to three reviews, via OpenReview |
