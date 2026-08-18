@@ -40,6 +40,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 RAW_DIR = Path("results/raw")
+MAX_CALLS = 0
+CALLS_MADE = 0
 PROMPT_VERSION = "v1_2026-08-07"
 
 # ---------------------------------------------------------------------------
@@ -73,6 +75,11 @@ MODELS = {
     # participant, and the per-model exclusion rule (DD-007) is untouched.
     "gemini-35flash":   {"backend": "gemini", "id": "gemini-3.5-flash",      "rpm": 10, "rpd": 0},
     "gemma31b":         {"backend": "gemini", "id": "gemma-4-31b-it",        "rpm": 10, "rpd": 0},
+    # A different model from the extractor (3.5-flash-lite), same high-quota family:
+    # the one free-tier participant that can complete a full four-condition sweep in a
+    # day. Exclusion stays per-model, the precedent set when gemini-flash entered the
+    # roster alongside the 3.5-flash-lite extractor.
+    "gemini-31flashlite": {"backend": "gemini", "id": "gemini-3.1-flash-lite", "rpm": 15, "rpd": 1000},
 
     # Local models. Needs Ollama running; nothing else changes.
     "qwen14b":  {"backend": "ollama", "id": "qwen3:14b",  "rpm": 0, "rpd": 0},
@@ -336,9 +343,11 @@ def run(model_key, items, language, mode, dry_run):
     if dry_run or not todo:
         return len(todo)
 
+    global CALLS_MADE
     # Pace requests to stay under the per-minute cap rather than being throttled.
     pause = 60.0 / MODELS[model_key]["rpm"] if MODELS[model_key].get("rpm") else 0.5
     consecutive_limited = 0
+    global CALLS_MADE
     template = load_prompt(language)
     RAW_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -347,7 +356,12 @@ def run(model_key, items, language, mode, dry_run):
     with output_path.open("a", encoding="utf-8") as out:
         for index, item in enumerate(todo, start=1):
             question = item[f"question_{language}"]
+            if MAX_CALLS and CALLS_MADE >= MAX_CALLS:
+                print(f"\n  --max-calls {MAX_CALLS} reached — stopping. Everything "
+                      f"answered so far is saved; re-run to continue.")
+                return len(todo) - index + 1
             try:
+                CALLS_MADE += 1
                 result = ask(model_key, template.format(question=question), use_search)
             except DailyQuotaReached as exc:
                 print(f"\n  daily quota reached after {index - 1} answers this session.")
@@ -400,7 +414,14 @@ def main():
     parser.add_argument("--modes", default="nosearch,search")
     parser.add_argument("--limit", type=int, help="only the first N items — use this for the pilot")
     parser.add_argument("--dry-run", action="store_true", help="print the plan, call nothing")
+    parser.add_argument("--max-calls", type=int, default=0,
+                        help="hard stop after this many API calls across the whole "
+                             "invocation — a spending brake for paid backends: no run "
+                             "can cost more than max-calls times the per-call price, "
+                             "whatever else happens")
     args = parser.parse_args()
+    global MAX_CALLS
+    MAX_CALLS = args.max_calls
 
     backend = MODELS[args.model]["backend"]
     if not args.dry_run:
