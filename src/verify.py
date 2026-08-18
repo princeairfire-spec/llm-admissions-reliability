@@ -217,6 +217,26 @@ def stats(rows):
         print(f"{DIM}  Near 100% means either a very good extractor or a reviewer not reading."
               f"\n  The control result below is what tells those apart.{OFF}")
 
+    seconds = [(first_opinion(r, rows), [v for v in r.get("reviews", [])
+                                          if v.get("pass") == "second"][-1].get("decision"))
+               for r in rows
+               if not r["is_control"] and any(v.get("pass") == "second"
+                                              for v in r.get("reviews", []))]
+    seconds = [(a, b) for a, b in seconds if a in ("accept", "reject") and b in ("accept", "reject")]
+    if seconds:
+        agree = sum(1 for a, b in seconds if a == b)
+        n2 = len(seconds)
+        po = agree / n2
+        from collections import Counter as _C
+        ca, cb = _C(a for a, _ in seconds), _C(b for _, b in seconds)
+        pe = sum((ca[l] / n2) * (cb[l] / n2) for l in ("accept", "reject"))
+        line = f"\nintra-annotator (blind re-pass): {agree}/{n2} = {po:.1%}"
+        line += f", kappa {(po - pe) / (1 - pe):.3f}" if pe < 1 else ", kappa undefined"
+        print(line + "   <- report this in the paper")
+        print(f"{DIM}  Compared against the fact-level first opinion, so import-time "
+              f"deduplication does not\n  masquerade as self-disagreement. Kappa is "
+              f"depressed by the accept-heavy base rate;\n  report both numbers.{OFF}")
+
     if controls:
         # Controls made before the redesign broke the "value appears in the quote"
         # property, so they tested something the pipeline already checks and gave the
