@@ -74,6 +74,32 @@ CURRENCY_WORDS = {
 }
 
 
+ANSWER_MARKER = re.compile(r"(?:^|\n)\s*(?:final\s+)?(?:answer|ответ)\s*[:—-]\s*", re.I)
+
+
+def committed_answer(text):
+    """The part of a response the model actually commits to.
+
+    Scratchpad-style models narrate candidate values and then reject them: Gemma writes
+    "…I should answer 'НЕ ЗНАЮ'. НЕ ЗНАЮ" after floating "3 years" mid-deliberation, and
+    a scorer that reads the whole text credits the rejected value as the answer. The
+    reverse also happened: gold "Thai" matched inside the word "Thailand" in a preamble
+    while the final line said "Английский". Both directions corrupt labels.
+
+    The commitment is the tail: everything after the last explicit answer marker if one
+    exists, else the last non-empty line. Returns (tail_1, tail_3) — the strict tail and
+    a three-line window for answers that end with a citation or a wrapped sentence.
+    """
+    if not text.strip():
+        return "", ""
+    parts = ANSWER_MARKER.split(text)
+    if len(parts) > 1:
+        tail = parts[-1].strip()
+        return tail, tail
+    lines = [l.strip() for l in text.splitlines() if l.strip()]
+    return lines[-1], "\n".join(lines[-3:])
+
+
 def strip_confidence(text):
     """Remove the trailing CONFIDENCE: line and return (answer, confidence)."""
     match = re.search(r"CONFIDENCE:\s*(high|medium|low)", text, re.IGNORECASE)
@@ -346,23 +372,38 @@ def score_one(row, item):
     elif not answer.strip():
         label, error_type = "EMPTY", None
     else:
-        # Correctness is judged before abstention, not after. Gemma prefixes its answers
-        # with a scratchpad that restates the prompt's instructions — including the
-        # literal words "reply with exactly: I DON'T KNOW" — and an abstention check
-        # that runs first reads that quotation and files a correct answer as a refusal;
-        # 93 of 94 pilot answers were mislabelled that way. A response that commits to
-        # the right fact is an attempt, whatever hedging surrounds it, and the same rule
-        # is applied to every model symmetrically.
+        # Only the committed tail of a response is scored. Judging the whole text let a
+        # scratchpad's rejected candidates count as answers (a value floated and then
+        # dismissed before an explicit НЕ ЗНАЮ was credited as CO), and let gold match
+        # inside incidental words of a preamble ("Thai" in "Thailand"). Judging
+        # abstention first, on the whole text, had the opposite failure: a scratchpad
+        # quoting the prompt's own "reply I DON'T KNOW" instruction turned correct
+        # answers into refusals. The order that survives both: match the strict tail,
+        # then abstention on the tail window, then match the tail window (for answers
+        # that end in a citation line), then IN.
+        tail_1, tail_3 = committed_answer(answer)
         targets = [item["gold_answer"], *item.get("acceptable_variants", [])]
-        if any(matches(answer, target) and qualifier_agrees(answer, item, target)
-               for target in targets):
+
+        def hit(segment):
+            return any(matches(segment, target) and qualifier_agrees(segment, item, target)
+                       for target in targets)
+
+        if row.get("stop_reason") == "MAX_TOKENS" and not ANSWER_MARKER.search(answer) \
+                and len(answer) > 600:
+            # Truncated mid-deliberation with no committed answer anywhere: neither an
+            # attempt nor a refusal happened.
+            label, error_type = "EMPTY", None
+        elif hit(tail_1):
             label, error_type = "CO", None
-        elif is_abstention(answer):
+        elif is_abstention(tail_3):
             label, error_type = "NA", None
+        elif hit(tail_3):
+            label, error_type = "CO", None
         else:
             label = "IN"
             prior = item.get("prior_year_answer")
-            error_type = "stale" if prior and matches(answer, prior) else "fabricated"
+            error_type = ("stale" if prior and (matches(tail_1, prior) or matches(tail_3, prior))
+                          else "fabricated")
 
     return {
         **row,
